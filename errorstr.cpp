@@ -81,6 +81,7 @@ ErrorString(DWORD dwErrorCode)
 	{
 		char OEMString[256];
 		CharToOemBuff(szErrorString, (LPSTR)OEMString, wcslen(szErrorString));
+		OEMString[wcslen(szErrorString)] = '\0';
 		printf("\n(%d) (0x%X) %s\n", dwErrorCode, dwErrorCode, OEMString);
 	}
 	else
@@ -98,8 +99,6 @@ ErrorString(DWORD dwErrorCode)
 		{
 			printf("\n(%d) (0x%X) %s\n", dwErrorCode, dwErrorCode, "Unable to get error message");
 		}
-
-
 	}
 	//SetConsoleCP(863);
 	//printf("%d\n",GetConsoleCP());

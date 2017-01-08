@@ -210,3 +210,4 @@ FakesAssemblies/
 GeneratedArtifacts/
 _Pvt_Extensions/
 ModelManifest.xml
+/WinHttpGetProxyForUrlTest_1.04_before_cleaning.cpp

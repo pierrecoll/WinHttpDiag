@@ -13,16 +13,17 @@ void ErrorPrint();
 LPCTSTR ErrorString(DWORD dwLastError);
 void PrintAutoProxyOptions(WINHTTP_AUTOPROXY_OPTIONS*  pAutoProxyOptions);
 BOOL 	SetProxyInfoOption(HINTERNET hRequest, WINHTTP_PROXY_INFO* pProxyInfo, DWORD cbProxyInfoSize);
-WCHAR Version[5] = L"1.10";
+WCHAR Version[5] = L"1.11";
 WCHAR wszWinHTTPDiagVersion[32] =L"WinHTTPDiag version ";
 void ShowProxyInfo(WINHTTP_PROXY_INFO* pProxyInfo, DWORD cbProxyInfoSize);
 
 void DisplayHelp()
 {
-		printf("WinHTTPDiag [-?] [-n] [url]\n");
+		printf("WinHTTPDiag [-?] [-n] [-d] [-i] [-r] [url]\n");
 		printf("-? : Displays help\n");
 		printf("-n : Not using WinHttpGetIEProxyConfigForCurrentUser results when calling WinHttpGetProxyForUrl\n");
-		printf("-d : Retrieves the default WinHTTP proxy configuration from the registry using WinHttpGetDefaultProxyConfiguration\n");
+		printf("-d : Displays the default WinHTTP proxy configuration from the registry using WinHttpGetDefaultProxyConfiguration which will be used with -n option\n");
+		printf("-i : Displays the proxy configuration using WinHttpGetIEProxyConfigForCurrentUser\n");
 		printf("-r : resetting auto-proxy caching using WinHttpResetAutoProxy with WINHTTP_RESET_ALL and WINHTTP_RESET_OUT_OF_PROC flags. Windows 8.0 and above only!\n");
 		printf("url : url to use in WinHttpSendRequest (using http://crl.microsoft.com/pki/crl/products/CodeSignPCA.crl if none given)\n");
 		printf("You can use psexec (http://live.sysinternals.com) -s to run WinHTTPDiag using the NT AUTHORITY\\SYSTEM (S-1-5-18) account: psexec -s c:\\tools\\WinHTTPProxyDiag\n");
@@ -90,7 +91,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 			if ((argv[1][1] == 'd'))
 			{
-				printf("Retrieving the default WinHTTP proxy configuration from the registry  using WinHttpGetDefaultProxyConfiguration\n");
+				printf("Displaying the default WinHTTP proxy configuration from the registry using WinHttpGetDefaultProxyConfiguration\n");
 				if (WinHttpGetDefaultProxyConfiguration(&ProxyInfo))
 				{
 					ShowProxyInfo(&ProxyInfo, cbProxyInfoSize);
@@ -98,6 +99,64 @@ int _tmain(int argc, _TCHAR* argv[])
 				else
 				{
 					printf("<-WinHttpGetDefaultProxyConfiguration failed");
+					ErrorPrint();
+				}
+				exit(0L);
+			}
+
+			if ((argv[1][1] == 'i'))
+			{
+				printf("Displaying the proxy configuration using WinHttpGetIEProxyConfigForCurrentUser\n");
+				printf("\n->Calling WinHttpGetIEProxyConfigForCurrentUser\n");
+				if (WinHttpGetIEProxyConfigForCurrentUser(&IEProxyConfig))
+				{
+					printf("\tWinHttpGetIEProxyConfigForCurrentUser returning SUCCESS\n");
+					printf("\tWINHTTP_CURRENT_USER_IE_PROXY_CONFIG structure members:\n");
+					if (IEProxyConfig.fAutoDetect)
+					{
+						printf("\t\tfAutoDetect is TRUE\n");
+						printf("\t\tInternet Explorer proxy configuration for the current user specifies 'automatically detect settings'\n");
+					}
+					else
+					{
+						printf("\t\tfAutoDetect FALSE\n");
+						printf("\t\tInternet Explorer proxy configuration for the current user does not specificy 'automatically detect settings'\n");
+					}
+
+					if (IEProxyConfig.lpszAutoConfigUrl)
+					{
+						printf("\t\tInternet Explorer proxy configuration for the current user specifies 'Use automatic proxy configuration'\n");
+						printf("\t\tlpszAutoConfigUrl: %S\n", IEProxyConfig.lpszAutoConfigUrl);
+					}
+					else
+					{
+						printf("\t\tlpszAutoConfigUrl is NULL\n");
+						printf("\t\tInternet Explorer proxy configuration for the current user does not specify 'Use automatic proxy configuration'\n");
+					}
+
+					if (IEProxyConfig.lpszProxy)
+					{
+						printf("\t\tNamed proxy configured: %S\n", IEProxyConfig.lpszProxy);
+
+					}
+					else
+					{
+						printf("\t\tlpszProxy is NULL\n");
+					}
+
+					if (IEProxyConfig.lpszProxyBypass)
+					{
+						printf("\t\tlpszProxyBypass: %S\n", IEProxyConfig.lpszProxyBypass);
+					}
+					else
+					{
+						printf("\t\tlpszProxyBypass is NULL\n");
+					}
+					AutoProxyOptions.fAutoLogonIfChallenged = TRUE;
+				}
+				else
+				{
+					printf("<-WinHttpGetIEProxyConfigForCurrentUser failed");
 					ErrorPrint();
 				}
 				exit(0L);
@@ -223,7 +282,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		printf("\n->Calling WinHttpGetDefaultProxyConfiguration\n");
 		if (WinHttpGetDefaultProxyConfiguration(&ProxyInfo))
 		{
-			printf("<-WinHttpGetDefaultProxyConfiguration success");
+			printf("<-WinHttpGetDefaultProxyConfiguration success\n");
 			// Display the proxy servers and free memory 
 			// allocated to this string.
 			if (ProxyInfo.lpszProxy != NULL)
