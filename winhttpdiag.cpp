@@ -13,9 +13,11 @@ void ErrorPrint();
 LPCTSTR ErrorString(DWORD dwLastError);
 void PrintAutoProxyOptions(WINHTTP_AUTOPROXY_OPTIONS*  pAutoProxyOptions);
 BOOL 	SetProxyInfoOption(HINTERNET hRequest, WINHTTP_PROXY_INFO* pProxyInfo, DWORD cbProxyInfoSize);
-WCHAR Version[5] = L"1.11";
+WCHAR Version[5] = L"1.12";
 WCHAR wszWinHTTPDiagVersion[32] =L"WinHTTPDiag version ";
 void ShowProxyInfo(WINHTTP_PROXY_INFO* pProxyInfo, DWORD cbProxyInfoSize);
+BOOL ShowIEProxyConfigForCurrentUser();
+WINHTTP_CURRENT_USER_IE_PROXY_CONFIG    IEProxyConfig;
 
 void DisplayHelp()
 {
@@ -60,7 +62,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	wcscat_s(wszWinHTTPDiagVersion, Version);
 	wprintf(L"%s  by pierrelc@microsoft.com\n", wszWinHTTPDiagVersion);
 
-    WINHTTP_CURRENT_USER_IE_PROXY_CONFIG    IEProxyConfig;
+ 
     BOOL fTryAutoProxy = FALSE;
 	BOOL fTryAutoConfig = FALSE;  //1.03
 	BOOL fTryNamedProxy = FALSE; //1.04
@@ -82,6 +84,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	{	
 		if ((argv[1][0]=='-') || (argv[1][0]=='/'))
 		{
+
 			if ((argv[1][1] == 'r'))
 			{
 				printf("resetting auto-proxy caching using WinHttpResetAutoProxy with WINHTTP_RESET_ALL and WINHTTP_RESET_OUT_OF_PROC flags\n");
@@ -106,59 +109,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 			if ((argv[1][1] == 'i'))
 			{
-				printf("Displaying the proxy configuration using WinHttpGetIEProxyConfigForCurrentUser\n");
-				printf("\n->Calling WinHttpGetIEProxyConfigForCurrentUser\n");
-				if (WinHttpGetIEProxyConfigForCurrentUser(&IEProxyConfig))
-				{
-					printf("\tWinHttpGetIEProxyConfigForCurrentUser returning SUCCESS\n");
-					printf("\tWINHTTP_CURRENT_USER_IE_PROXY_CONFIG structure members:\n");
-					if (IEProxyConfig.fAutoDetect)
-					{
-						printf("\t\tfAutoDetect is TRUE\n");
-						printf("\t\tInternet Explorer proxy configuration for the current user specifies 'automatically detect settings'\n");
-					}
-					else
-					{
-						printf("\t\tfAutoDetect FALSE\n");
-						printf("\t\tInternet Explorer proxy configuration for the current user does not specificy 'automatically detect settings'\n");
-					}
-
-					if (IEProxyConfig.lpszAutoConfigUrl)
-					{
-						printf("\t\tInternet Explorer proxy configuration for the current user specifies 'Use automatic proxy configuration'\n");
-						printf("\t\tlpszAutoConfigUrl: %S\n", IEProxyConfig.lpszAutoConfigUrl);
-					}
-					else
-					{
-						printf("\t\tlpszAutoConfigUrl is NULL\n");
-						printf("\t\tInternet Explorer proxy configuration for the current user does not specify 'Use automatic proxy configuration'\n");
-					}
-
-					if (IEProxyConfig.lpszProxy)
-					{
-						printf("\t\tNamed proxy configured: %S\n", IEProxyConfig.lpszProxy);
-
-					}
-					else
-					{
-						printf("\t\tlpszProxy is NULL\n");
-					}
-
-					if (IEProxyConfig.lpszProxyBypass)
-					{
-						printf("\t\tlpszProxyBypass: %S\n", IEProxyConfig.lpszProxyBypass);
-					}
-					else
-					{
-						printf("\t\tlpszProxyBypass is NULL\n");
-					}
-					AutoProxyOptions.fAutoLogonIfChallenged = TRUE;
-				}
-				else
-				{
-					printf("<-WinHttpGetIEProxyConfigForCurrentUser failed");
-					ErrorPrint();
-				}
+				ShowIEProxyConfigForCurrentUser();
 				exit(0L);
 			}
 
@@ -200,70 +151,40 @@ int _tmain(int argc, _TCHAR* argv[])
 	}
 
 	if (bGetIEProxyConfigForCurrentUser == TRUE)
-	{		
-		printf("\n->Calling WinHttpGetIEProxyConfigForCurrentUser\n");
-		if (WinHttpGetIEProxyConfigForCurrentUser(&IEProxyConfig)) 
+	{	
+		if (ShowIEProxyConfigForCurrentUser())
 		{
-			printf("\tWinHttpGetIEProxyConfigForCurrentUser returning SUCCESS\n");
-			printf("\tWINHTTP_CURRENT_USER_IE_PROXY_CONFIG structure members:\n");
 			if (IEProxyConfig.fAutoDetect) 
 			{
-				// AutoProxyOptions.dwFlags = WINHTTP_AUTOPROXY_AUTO_DETECT;  Version 1.04 for fallback
 				fTryAutoProxy = TRUE;
 				printf("\t\tfAutoDetect is TRUE\n");
 				printf("\t\tInternet Explorer proxy configuration for the current user specifies 'automatically detect settings'\n");
-				//printf("\t\tSetting  WINHTTP_AUTOPROXY_AUTO_DETECT flag in WINHTTP_AUTOPROXY_OPTIONS dwFlags\n");  
-				//goto WinHTTPOpen;   version 1.04 for fallback 
-			}
-			else
-			{
-				printf("\t\tfAutoDetect FALSE\n");
-				printf("\t\tInternet Explorer proxy configuration for the current user does not specificy 'automatically detect settings'\n");				
 			}
 
 			if (IEProxyConfig.lpszAutoConfigUrl) 
 			{
 				// fTryAutoProxy = FALSE;  //version 1.02  -> version 1.04 AUtodetect should fallback to autoconfig in case of failure
 				fTryAutoConfig = TRUE;  //Version 1.03
-				printf("\t\tInternet Explorer proxy configuration for the current user specifies 'Use automatic proxy configuration'\n");
-    			printf("\t\tlpszAutoConfigUrl: %S\n",IEProxyConfig.lpszAutoConfigUrl);
 			}  
-			else 
-			{
-    			printf("\t\tlpszAutoConfigUrl is NULL\n");
-				printf("\t\tInternet Explorer proxy configuration for the current user does not specify 'Use automatic proxy configuration'\n");
-			}
 
 			if (IEProxyConfig.lpszProxy) 
 			{
-				ProxyInfo.dwAccessType    = WINHTTP_ACCESS_TYPE_NAMED_PROXY;
-				ProxyInfo.lpszProxy       = IEProxyConfig.lpszProxy;
 				//fTryAutoProxy = FALSE;  fallback version 1.04
 				fTryNamedProxy = TRUE; //1.04
-    			printf("\t\tNamed proxy configured: %S\n",IEProxyConfig.lpszProxy);	
-			}
-			else 
-			{
-    			printf("\t\tlpszProxy is NULL\n");
 			}
 
 			if (IEProxyConfig.lpszProxyBypass) 
 			{
-    			printf("\tWinHttpGetIEProxyConfigForCurrentUser lpszProxyBypass: %S\n",IEProxyConfig.lpszProxyBypass);
 			   ProxyInfo.lpszProxyBypass = IEProxyConfig.lpszProxyBypass;
 			}
-			else 
-			{
-    			printf("\t\tlpszProxyBypass is NULL\n");
-			}
+
 			printf("\t\tSetting fAutoLogonIfChallenged in WINHTTP_AUTOPROXY_OPTIONS to TRUE\n");
-			printf("\t\tThe client's domain  credentials will automatically be sent in response to an authentication challenge when WinHTTP requests the PAC file\n");
+			printf("\t\t->The client's domain  credentials will automatically be sent in response to an authentication challenge\n");
+			printf("\t\t when WinHTTP requests the PAC file\n");
 			AutoProxyOptions.fAutoLogonIfChallenged = TRUE;
 		} 
 		else 
 		{
-			printf("<-WinHttpGetIEProxyConfigForCurrentUser failed");
-			ErrorPrint();
 			// WinHttpingGetIEProxyForCurrentUser failed, try autodetection anyway...
 			AutoProxyOptions.dwFlags = WINHTTP_AUTOPROXY_AUTO_DETECT;
 			fTryAutoProxy = TRUE;
@@ -351,7 +272,7 @@ winhttpopen:
 				"WinHttpResetAutoProxy");
 			if (!pfnWinHttpResetAutoProxy)
 			{
-				printf("Could not find WinHttpResetAutoProxy in WinHTTP.DLL. This function only exitsin Windows version 8.0 and above\n");
+				printf("Could not find WinHttpResetAutoProxy in WinHTTP.DLL. This function only exits in Windows version 8.0 and above\n");
 				ErrorPrint();
 				goto Exit;
 			}
@@ -754,7 +675,7 @@ void GetHost(WCHAR *pwszUrl, WCHAR *pwszHost, WCHAR *pwszPath, INTERNET_PORT *po
 	if (URLParts.nPort)
 	{
 		*port = URLParts.nPort;
-		wprintf(L"WinHttpCrackUrl returning port:  %d 0x%X\r\n", *port, *port);
+		wprintf(L"WinHttpCrackUrl returning port:  %d (0x%X)\r\n", *port, *port);
 	}
 	return;
 }
@@ -930,6 +851,63 @@ void ShowProxyInfo(WINHTTP_PROXY_INFO* pProxyInfo, DWORD cbProxyInfoSize)
 }
 
 
+BOOL ShowIEProxyConfigForCurrentUser()
+{
+	printf("Displaying the proxy configuration using WinHttpGetIEProxyConfigForCurrentUser\n");
+	printf("\n->Calling WinHttpGetIEProxyConfigForCurrentUser\n");
+	if (WinHttpGetIEProxyConfigForCurrentUser(&IEProxyConfig))
+	{
+		printf("\tWinHttpGetIEProxyConfigForCurrentUser returning SUCCESS\n");
+		printf("\tWINHTTP_CURRENT_USER_IE_PROXY_CONFIG structure members:\n");
+		if (IEProxyConfig.fAutoDetect)
+		{
+			printf("\t\tfAutoDetect is TRUE\n");
+			printf("\t\t\t->Internet Explorer proxy configuration for the current user specifies 'automatically detect settings'\n");
+		}
+		else
+		{
+			printf("\t\tfAutoDetect is FALSE\n");
+			printf("\t\t\t->Internet Explorer proxy configuration for the current user does not specificy 'automatically detect settings'\n");
+		}
+
+		if (IEProxyConfig.lpszAutoConfigUrl)
+		{	
+			printf("\t\tlpszAutoConfigUrl is: %S\n", IEProxyConfig.lpszAutoConfigUrl);
+			printf("\t\t->Internet Explorer proxy configuration for the current user specifies 'Use automatic proxy configuration'\n");
+		}
+		else
+		{
+			printf("\t\tlpszAutoConfigUrl is NULL\n");
+			printf("\t\t->Internet Explorer proxy configuration for the current user does not specify 'Use automatic proxy configuration'\n");
+		}
+
+		if (IEProxyConfig.lpszProxy)
+		{
+			printf("\t\tNamed proxy configured: %S\n", IEProxyConfig.lpszProxy);
+		}
+		else
+		{
+			printf("\t\tlpszProxy is NULL\n");
+		}
+
+		if (IEProxyConfig.lpszProxyBypass)
+		{
+			printf("\t\tlpszProxyBypass: %S\n", IEProxyConfig.lpszProxyBypass);
+		}
+		else
+		{
+			printf("\t\tlpszProxyBypass is NULL\n");
+		}
+		printf("<-WinHttpGetIEProxyConfigForCurrentUser succeeded\n\n");
+		return TRUE;
+	}
+	else
+	{
+		printf("<-WinHttpGetIEProxyConfigForCurrentUser failed\n");
+		ErrorPrint();
+		return FALSE;
+	}
+}
 void ErrorPrint()
 {	
 	ErrorString(GetLastError());
