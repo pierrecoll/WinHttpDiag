@@ -12,12 +12,15 @@ void ErrorPrint();
 //errorstr.cpp
 LPCTSTR ErrorString(DWORD dwLastError);
 void PrintAutoProxyOptions(WINHTTP_AUTOPROXY_OPTIONS*  pAutoProxyOptions);
-BOOL 	SetProxyInfoOption(HINTERNET hRequest, WINHTTP_PROXY_INFO* pProxyInfo, DWORD cbProxyInfoSize);
-WCHAR Version[5] = L"1.12";
-WCHAR wszWinHTTPDiagVersion[32] =L"WinHTTPDiag version ";
+BOOL SetProxyInfoOption(HINTERNET hRequest, WINHTTP_PROXY_INFO* pProxyInfo, DWORD cbProxyInfoSize);
 void ShowProxyInfo(WINHTTP_PROXY_INFO* pProxyInfo, DWORD cbProxyInfoSize);
 BOOL ShowIEProxyConfigForCurrentUser();
-WINHTTP_CURRENT_USER_IE_PROXY_CONFIG    IEProxyConfig;
+BOOL ResetAll(HINTERNET hHttpSession);
+
+WCHAR Version[5] = L"1.13";
+WCHAR wszWinHTTPDiagVersion[32] =L"WinHTTPDiag version ";
+
+WINHTTP_CURRENT_USER_IE_PROXY_CONFIG IEProxyConfig;
 
 void DisplayHelp()
 {
@@ -157,8 +160,6 @@ int _tmain(int argc, _TCHAR* argv[])
 			if (IEProxyConfig.fAutoDetect) 
 			{
 				fTryAutoProxy = TRUE;
-				printf("\t\tfAutoDetect is TRUE\n");
-				printf("\t\tInternet Explorer proxy configuration for the current user specifies 'automatically detect settings'\n");
 			}
 
 			if (IEProxyConfig.lpszAutoConfigUrl) 
@@ -222,7 +223,6 @@ int _tmain(int argc, _TCHAR* argv[])
 			{
 				printf("\tDefault Proxy Configuration Proxy server bypass list is empty\n");
 			}
-
 		}
 		else
 		{
@@ -255,49 +255,7 @@ winhttpopen:
 	printf("<-WinHttpOpen succeeded\n");
 	if (fResetAll == TRUE)
 	{
-		DWORD dReturn;
-		typedef
-			DWORD
-			(WINAPI
-			*PFN_WINHTTPRESETAUTOPROXY)(
-			__in_opt HINTERNET hSession,
-			__in DWORD dwFlags
-			);
-		PFN_WINHTTPRESETAUTOPROXY pfnWinHttpResetAutoProxy = NULL;
-		HMODULE shWinHttp = LoadLibraryExW(L"winhttp.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
-		//1.06
-		if (shWinHttp)
-		{
-			pfnWinHttpResetAutoProxy = (PFN_WINHTTPRESETAUTOPROXY)GetProcAddress(shWinHttp,
-				"WinHttpResetAutoProxy");
-			if (!pfnWinHttpResetAutoProxy)
-			{
-				printf("Could not find WinHttpResetAutoProxy in WinHTTP.DLL. This function only exits in Windows version 8.0 and above\n");
-				ErrorPrint();
-				goto Exit;
-			}
-			printf("\n->Calling WinHttpResetAutoProxy witht flags WINHTTP_RESET_ALL | WINHTTP_RESET_OUT_OF_PROC\n");
-			print_time();
-			dReturn = pfnWinHttpResetAutoProxy(hHttpSession, WINHTTP_RESET_ALL | WINHTTP_RESET_OUT_OF_PROC);
-			print_time();
-			if (dReturn != ERROR_SUCCESS)
-			{
-				printf("<-WinHttpResetAutoProxy failed");
-				ErrorPrint();
-			}
-			else
-			{
-				printf("<-WinHttpResetAutoProxy success\n");
-				printf("Note  If you make subsequent calls to the WinHttpResetAutoProxy function, there must be at least 30 seconds delay between calls to reset the state of the auto-proxy.\n");
-				printf("If there is less than 30 seconds, the WinHttpResetAutoProxy function call may return ERROR_SUCCESS but the reset won't happen.\n");
-			}
-		}
-		else
-		{
-			printf("Loading winhttp.dll failed\n");
-			ErrorPrint();
-			goto Exit;
-		}
+		ResetAll(hHttpSession);
 		goto Exit;
 	}
 	//1.09
@@ -346,15 +304,6 @@ winhttpopen:
 	printf("<-WinHttpOpenRequest succeeded. hrequest=%X",(unsigned int)hRequest);
 	print_time();	
 			
-
-	//
-	// Set up the autoproxy call.
-	//
-
-	// Use auto-detection because the Proxy 
-	// Auto-Config URL is not known.
-	//AutoProxyOptions.dwFlags = WINHTTP_AUTOPROXY_AUTO_DETECT;
-
 	// Use DHCP and DNS-based auto-detection.
 	BOOL bTryWithDNS=FALSE;
 	if (fTryAutoProxy)
@@ -363,11 +312,9 @@ winhttpopen:
 		//First try with DHCP
 		AutoProxyOptions.dwAutoDetectFlags = WINHTTP_AUTO_DETECT_TYPE_DHCP; 
 
-		// If obtaining the PAC script requires NTLM/Negotiate
-		// authentication, then automatically supply the client
-		// domain credentials.
+		// If obtaining the PAC script requires NTLM/Negotiate authentication, then automatically supply the client domain credentials.
 		AutoProxyOptions.fAutoLogonIfChallenged = TRUE;
-	}	//
+	}	
 	// Call WinHttpGetProxyForUrl with our target URL. 
 	// If auto-proxy succeeds, then set the proxy info on the request handle. 
 	// If auto-proxy fails, ignore the error and attempt to send the HTTP request directly to the target server 
@@ -392,7 +339,7 @@ Retry:
 			print_time();	
 			printf("\r\n");
 
-			// A proxy configuration was found, set it on therequest handle 
+			// A proxy configuration was found, set it on the request handle 
 			printf("->Calling WinHttpSetOption with following proxy configuration found by WinHttpGetProxyForUrl:\n");
 			SetProxyInfoOption(hRequest, &ProxyInfo,cbProxyInfoSize);
 			print_time();
@@ -636,6 +583,54 @@ Exit:
 	return 0;
 }
 
+BOOL ResetAll(HINTERNET hHttpSession)
+{
+	DWORD dReturn;
+	typedef
+		DWORD
+		(WINAPI
+			*PFN_WINHTTPRESETAUTOPROXY)(
+				__in_opt HINTERNET hSession,
+				__in DWORD dwFlags
+				);
+	PFN_WINHTTPRESETAUTOPROXY pfnWinHttpResetAutoProxy = NULL;
+	HMODULE shWinHttp = LoadLibraryExW(L"winhttp.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
+	//1.06
+	if (shWinHttp)
+	{
+		pfnWinHttpResetAutoProxy = (PFN_WINHTTPRESETAUTOPROXY)GetProcAddress(shWinHttp,
+			"WinHttpResetAutoProxy");
+		if (!pfnWinHttpResetAutoProxy)
+		{
+			printf("Could not find WinHttpResetAutoProxy in WinHTTP.DLL. This function only exits in Windows version 8.0 and above\n");
+			ErrorPrint();
+			return FALSE;
+		}
+		printf("\n->Calling WinHttpResetAutoProxy witht flags WINHTTP_RESET_ALL | WINHTTP_RESET_OUT_OF_PROC\n");
+		print_time();
+		dReturn = pfnWinHttpResetAutoProxy(hHttpSession, WINHTTP_RESET_ALL | WINHTTP_RESET_OUT_OF_PROC);
+		print_time();
+		if (dReturn != ERROR_SUCCESS)
+		{
+			printf("<-WinHttpResetAutoProxy failed");
+			ErrorPrint();
+			return FALSE;
+		}
+		else
+		{
+			printf("<-WinHttpResetAutoProxy success\n");
+			printf("Note  If you make subsequent calls to the WinHttpResetAutoProxy function, there must be at least 30 seconds delay between calls to reset the state of the auto-proxy.\n");
+			printf("If there is less than 30 seconds, the WinHttpResetAutoProxy function call may return ERROR_SUCCESS but the reset won't happen.\n");
+		}
+	}
+	else
+	{
+		printf("Loading winhttp.dll failed\n");
+		ErrorPrint();
+		return FALSE;
+	}
+	return TRUE;
+}
 
 void GetHost(WCHAR *pwszUrl, WCHAR *pwszHost, WCHAR *pwszPath, INTERNET_PORT *port)
 {
