@@ -3,10 +3,13 @@
 #include "stdafx.h"
 #include "string.h"
 #include "time.h"
+#include "Winhttp.h"
+
+
 
 #pragma comment(lib, "winhttp.lib")
 
-void GetHost(WCHAR *pwszUrl, WCHAR *pwszHost, WCHAR *pwszPath, INTERNET_PORT *port);
+void GetHost(WCHAR *pwszUrl, WCHAR *pwszHost, WCHAR *pwszPath, WCHAR *pwszExtraInfo, INTERNET_PORT *port);
 void 	print_time(void);	
 DWORD ErrorPrint();
 //errorstr.cpp
@@ -18,8 +21,22 @@ void ShowProxyInfo(WINHTTP_PROXY_INFO* pProxyInfo, DWORD cbProxyInfoSize);
 BOOL ShowIEProxyConfigForCurrentUser();
 BOOL ResetAll(HINTERNET hHttpSession);
 
+//
+// maximum field lengths (arbitrary) from wininet?h
+//
 
-WCHAR Version[5] = L"1.14";
+#define INTERNET_MAX_HOST_NAME_LENGTH   256
+#define INTERNET_MAX_USER_NAME_LENGTH   128
+#define INTERNET_MAX_PASSWORD_LENGTH    128
+#define INTERNET_MAX_PORT_NUMBER_LENGTH 5           // INTERNET_PORT is unsigned short
+#define INTERNET_MAX_PORT_NUMBER_VALUE  65535       // maximum unsigned short value
+#define INTERNET_MAX_PATH_LENGTH        2048
+#define INTERNET_MAX_SCHEME_LENGTH      32          // longest protocol name length
+#define INTERNET_MAX_URL_LENGTH         (INTERNET_MAX_SCHEME_LENGTH \
+                                        + sizeof("://") \
+                                        + INTERNET_MAX_PATH_LENGTH)
+
+WCHAR Version[5] = L"1.16";
 WCHAR wszWinHTTPDiagVersion[32] =L"WinHTTPDiag version ";
 
 WINHTTP_CURRENT_USER_IE_PROXY_CONFIG IEProxyConfig;
@@ -57,9 +74,9 @@ int _tmain(int argc, _TCHAR* argv[])
 	ZeroMemory( &AutoProxyOptions, sizeof(AutoProxyOptions) );
 	ZeroMemory( &ProxyInfo, sizeof(ProxyInfo) );
 
-	WCHAR DefaultUrl[MAX_PATH]=L"http://crl.microsoft.com/pki/crl/products/CodeSignPCA.crl";
+	WCHAR DefaultUrl[INTERNET_MAX_URL_LENGTH]=L"http://crl.microsoft.com/pki/crl/products/CodeSignPCA.crl";
 
-	WCHAR url[MAX_PATH] = L"";
+	WCHAR url[INTERNET_MAX_URL_LENGTH] = L"";
 
 	BOOL bGetIEProxyConfigForCurrentUser=TRUE;
 
@@ -76,6 +93,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	BOOL fResetAll = FALSE; //1.05
 	BOOL fUseAutomaticProxyFlag = FALSE; //1.14
     BOOL fSuccess = FALSE;
+	BOOL bInvalidParameterRetry = TRUE; //1.16
 
     ZeroMemory(&ProxyInfo, sizeof(ProxyInfo));
     ZeroMemory(&AutoProxyOptions, sizeof(AutoProxyOptions));
@@ -285,10 +303,25 @@ winhttpopen:
 		goto Exit;
 	}
 	//1.09
-	WCHAR host[MAX_PATH] = L"";
-	WCHAR path[MAX_PATH] = L"";
+	WCHAR host[INTERNET_MAX_HOST_NAME_LENGTH] = L"";
+	WCHAR path[INTERNET_MAX_PATH_LENGTH] = L"";
+	WCHAR ExtraInfo[INTERNET_MAX_PATH_LENGTH] = L"";
 	INTERNET_PORT port;
-	GetHost(url,host,path,&port);
+
+	GetHost(url,host,path,ExtraInfo,&port);
+
+	WCHAR ObjectName[INTERNET_MAX_PATH_LENGTH] = L"";
+	//Combining path and extra info
+	if (wcscat_s(ObjectName, INTERNET_MAX_PATH_LENGTH, path))
+	{
+		printf("Error copying path %S in ObjectName\r\n", path);
+		exit(-1L);
+	}
+	if (wcscat_s(ObjectName, INTERNET_MAX_PATH_LENGTH, ExtraInfo))
+	{
+		printf("Error copying ExtraInfo %S in ObjectName %S\r\n", ExtraInfo, ObjectName);
+		exit(-1L);
+	}
 	//
 	// Create the WinHTTP connect handle.
 	//
@@ -311,7 +344,7 @@ winhttpopen:
 	//
 	// Create the HTTP request handle.
 	//
-	printf("\n->Calling WinHttpOpenRequest with path : %S\n",path);
+	printf("\n->Calling WinHttpOpenRequest with Object name : %S\r\n",ObjectName);
 	hRequest = WinHttpOpenRequest( hConnect,
 		L"GET",
 		path,
@@ -447,11 +480,20 @@ tryautoconfig:
 			ErrorPrint();
 			if (GetLastError() == ERROR_INVALID_PARAMETER)
 			{
-				printf("WinHttpGetProxyForUrl failed with ERROR_INVALID_PARAMETER. Removing some parameters not supported on Windows7/2008R2\n ");
-				AutoProxyOptions.dwFlags ^= WINHTTP_AUTOPROXY_NO_DIRECTACCESS;
-				AutoProxyOptions.dwFlags ^= WINHTTP_AUTOPROXY_NO_CACHE_CLIENT;
-				AutoProxyOptions.dwFlags ^= WINHTTP_AUTOPROXY_NO_CACHE_SVC;
-				goto tryautoconfig;
+				if (bInvalidParameterRetry)
+				{
+					printf("WinHttpGetProxyForUrl failed with ERROR_INVALID_PARAMETER. Removing some parameters not supported on Windows7/2008R2\n ");
+					AutoProxyOptions.dwFlags ^= WINHTTP_AUTOPROXY_NO_DIRECTACCESS;
+					AutoProxyOptions.dwFlags ^= WINHTTP_AUTOPROXY_NO_CACHE_CLIENT;
+					AutoProxyOptions.dwFlags ^= WINHTTP_AUTOPROXY_NO_CACHE_SVC;
+					bInvalidParameterRetry = FALSE;
+					goto tryautoconfig;
+				}
+				else
+				{
+					printf("WinHttpGetProxyForUrl failed with ERROR_INVALID_PARAMETER.\r\n ");
+					goto Exit;
+				}			
 			}
 			print_time();
 			if (AutoProxyOptions.dwFlags & WINHTTP_AUTOPROXY_RUN_OUTPROCESS_ONLY)
@@ -480,6 +522,11 @@ tryautoconfig:
 		}
 		printf("\tNamed proxy configured: %S\n", ProxyInfo.lpszProxy);
 		ProxyInfo.dwAccessType = WINHTTP_ACCESS_TYPE_NAMED_PROXY;
+
+		if (IEProxyConfig.lpszProxyBypass)
+		{
+			ProxyInfo.lpszProxyBypass = IEProxyConfig.lpszProxyBypass;
+		}
 
 		printf("->Calling WinHttpSetOption with proxy configuration set to:\n");
 		SetProxyInfo(hRequest, &ProxyInfo, cbProxyInfoSize);
@@ -666,7 +713,7 @@ BOOL ResetAll(HINTERNET hHttpSession)
 	return TRUE;
 }
 
-void GetHost(WCHAR *pwszUrl, WCHAR *pwszHost, WCHAR *pwszPath, INTERNET_PORT *port)
+void GetHost(WCHAR *pwszUrl, WCHAR *pwszHost, WCHAR *pwszPath, WCHAR *pwszExtraInfo, INTERNET_PORT *port)
 {
 	URL_COMPONENTSW URLParts;
 
@@ -690,17 +737,25 @@ void GetHost(WCHAR *pwszUrl, WCHAR *pwszHost, WCHAR *pwszPath, INTERNET_PORT *po
 	}
 	if (URLParts.lpszHostName)
 	{
-		wcscpy_s(pwszHost, MAX_PATH, URLParts.lpszHostName);
+		wcsncpy_s(pwszHost, INTERNET_MAX_HOST_NAME_LENGTH, URLParts.lpszHostName, URLParts.dwHostNameLength);
 		pwszHost[URLParts.dwHostNameLength] = L'\0';
 		wprintf(L"WinHttpCrackUrl returning host name : %s\r\n", pwszHost);
 	}
 
 	if (URLParts.lpszUrlPath)
 	{
-		wcscpy_s(pwszPath, MAX_PATH, URLParts.lpszUrlPath);
+		wcsncpy_s(pwszPath, INTERNET_MAX_PATH_LENGTH, URLParts.lpszUrlPath, URLParts.dwUrlPathLength);
 		pwszPath[URLParts.dwUrlPathLength] = L'\0';
 		wprintf(L"WinHttpCrackUrl returning path : %s\r\n", pwszPath);
 	}
+
+	if (URLParts.lpszExtraInfo)
+	{
+		wcsncpy_s(pwszExtraInfo, INTERNET_MAX_PATH_LENGTH, URLParts.lpszExtraInfo, URLParts.dwExtraInfoLength);
+		pwszExtraInfo[URLParts.dwExtraInfoLength] = L'\0';
+		wprintf(L"WinHttpCrackUrl returning extra info : %s\r\n", pwszExtraInfo);
+	}
+
 	if (URLParts.nPort)
 	{
 		*port = URLParts.nPort;
