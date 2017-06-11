@@ -5,8 +5,6 @@
 #include "time.h"
 #include "Winhttp.h"
 
-
-
 #pragma comment(lib, "winhttp.lib")
 
 void GetHost(WCHAR *pwszUrl, WCHAR *pwszHost, WCHAR *pwszPath, WCHAR *pwszExtraInfo, INTERNET_PORT *port);
@@ -22,7 +20,7 @@ BOOL ShowIEProxyConfigForCurrentUser();
 BOOL ResetAll(HINTERNET hHttpSession);
 
 //
-// maximum field lengths (arbitrary) from wininet?h
+// maximum field lengths (arbitrary) from wininet.h
 //
 
 #define INTERNET_MAX_HOST_NAME_LENGTH   256
