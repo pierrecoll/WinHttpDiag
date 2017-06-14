@@ -34,7 +34,7 @@ BOOL ResetAll(HINTERNET hHttpSession);
                                         + sizeof("://") \
                                         + INTERNET_MAX_PATH_LENGTH)
 
-WCHAR Version[5] = L"1.16";
+WCHAR Version[5] = L"1.17";
 WCHAR wszWinHTTPDiagVersion[32] =L"WinHTTPDiag version ";
 
 WINHTTP_CURRENT_USER_IE_PROXY_CONFIG IEProxyConfig;
@@ -44,6 +44,7 @@ void DisplayHelp()
 	printf("WinHTTPDiag [-?] [-a] [-n] [-d] [-i] [-r] [url]\n");
 	printf("-? : Displays help\n");
 	printf("-n : Not using WinHttpGetIEProxyConfigForCurrentUser results when calling WinHttpGetProxyForUrl\n");
+	printf("-f : Forcing  automatic detection process\n");
 	printf("-a : Using WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY flag (Windows 8.1 and above only)\n");
 	printf("-d : Displays the default WinHTTP proxy configuration from the registry using WinHttpGetDefaultProxyConfiguration which will be used with -n option\n");
 	printf("-i : Displays the proxy configuration using WinHttpGetIEProxyConfigForCurrentUser\n");
@@ -130,6 +131,23 @@ int _tmain(int argc, _TCHAR* argv[])
 				exit(0L);
 			}
 
+			if (argv[1][1] == 'a')
+			{
+				fUseAutomaticProxyFlag = TRUE;
+				printf("Using WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY flag (Windows 8.1 and above only)\n");
+				goto automatic;
+			}
+
+			if (argv[1][1] == 'f')
+			{
+				AutoProxyOptions.dwFlags = WINHTTP_AUTOPROXY_AUTO_DETECT;
+				fTryAutoProxy = TRUE;
+				printf("\t Forcing  WINHTTP_AUTOPROXY_AUTO_DETECT\n");
+				wcscpy_s(url, DefaultUrl);
+				printf("Using url %S in WinHttpSendRequest\n", url);
+				goto winhttpopen;
+			}
+
 			if ((argv[1][1] == 'i'))
 			{
 				ShowIEProxyConfigForCurrentUser();
@@ -141,6 +159,7 @@ int _tmain(int argc, _TCHAR* argv[])
 				DisplayHelp();
 				exit(-1);
 			}
+automatic:
 			bGetIEProxyConfigForCurrentUser=FALSE;
 			printf("Not using WinHttpGetIEProxyConfigForCurrentUser results to call WinHttpGetProxyForUrl\n");
 			wcscpy_s(url, DefaultUrl);		
@@ -168,6 +187,14 @@ int _tmain(int argc, _TCHAR* argv[])
 				fUseAutomaticProxyFlag = TRUE;		
 				bGetIEProxyConfigForCurrentUser = FALSE;
 				printf("Using WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY flag (Windows 8.1 and above only)\n");
+				wcscpy_s(url, argv[2]);
+				printf("Using url %S in WinHttpSendRequest\n", url);
+			}
+			else if (argv[1][1] == 'f')
+			{
+				AutoProxyOptions.dwFlags = WINHTTP_AUTOPROXY_AUTO_DETECT;
+				fTryAutoProxy = TRUE;
+				printf("\t Forcing  WINHTTP_AUTOPROXY_AUTO_DETECT\n");
 				wcscpy_s(url, argv[2]);
 				printf("Using url %S in WinHttpSendRequest\n", url);
 			}
