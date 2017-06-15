@@ -192,11 +192,13 @@ automatic:
 			}
 			else if (argv[1][1] == 'f')
 			{
+				bGetIEProxyConfigForCurrentUser = FALSE;
 				AutoProxyOptions.dwFlags = WINHTTP_AUTOPROXY_AUTO_DETECT;
 				fTryAutoProxy = TRUE;
 				printf("\t Forcing  WINHTTP_AUTOPROXY_AUTO_DETECT\n");
 				wcscpy_s(url, argv[2]);
 				printf("Using url %S in WinHttpSendRequest\n", url);
+				goto winhttpopen;
 			}
 			else 
 			{
