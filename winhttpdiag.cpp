@@ -34,7 +34,7 @@ BOOL ResetAll(HINTERNET hHttpSession);
                                         + sizeof("://") \
                                         + INTERNET_MAX_PATH_LENGTH)
 
-WCHAR Version[5] = L"1.17";
+WCHAR Version[5] = L"1.18";
 WCHAR wszWinHTTPDiagVersion[32] =L"WinHTTPDiag version ";
 
 WINHTTP_CURRENT_USER_IE_PROXY_CONFIG IEProxyConfig;
@@ -516,11 +516,6 @@ tryautoconfig:
 					bInvalidParameterRetry = FALSE;
 					goto tryautoconfig;
 				}
-				else
-				{
-					printf("WinHttpGetProxyForUrl failed with ERROR_INVALID_PARAMETER.\r\n ");
-					goto Exit;
-				}			
 			}
 			print_time();
 			if (AutoProxyOptions.dwFlags & WINHTTP_AUTOPROXY_RUN_OUTPROCESS_ONLY)
