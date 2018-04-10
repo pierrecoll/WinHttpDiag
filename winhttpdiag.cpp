@@ -33,7 +33,7 @@ BOOL ResetAll(HINTERNET hHttpSession);
                                         + sizeof("://") \
                                         + INTERNET_MAX_PATH_LENGTH)
 
-WCHAR Version[5] = L"1.18";
+WCHAR Version[5] = L"1.19";
 WCHAR wszWinHTTPDiagVersion[32] =L"WinHTTPDiag version ";
 
 WINHTTP_CURRENT_USER_IE_PROXY_CONFIG IEProxyConfig;
@@ -241,6 +241,7 @@ automatic:
 			printf("\t\tSetting fAutoLogonIfChallenged in WINHTTP_AUTOPROXY_OPTIONS to TRUE\n");
 			printf("\t\t->The client's domain  credentials will automatically be sent in response to an authentication challenge\n");
 			printf("\t\t when WinHTTP requests the PAC file\n");
+			printf("\t\tOnly applies if you did not install MS16-077: Security update for WPAD: June 14, 2016. See https://support.microsoft.com/en-us/help/3165191/ms16-077-security-update-for-wpad-june-14-2016 \n");
 			AutoProxyOptions.fAutoLogonIfChallenged = TRUE;
 		} 
 		else 
@@ -501,10 +502,13 @@ tryautoconfig:
 		}
 		else
 		{
-			//004082016  1.07
+			print_time();
 			printf("<-WinHttpGetProxyForUrl failed");
-			ErrorPrint();
-			if (GetLastError() == ERROR_INVALID_PARAMETER)
+			//order is important!
+			DWORD error = GetLastError();
+			ErrorPrint();			
+
+			if (error == ERROR_INVALID_PARAMETER)
 			{
 				if (bInvalidParameterRetry)
 				{
@@ -516,13 +520,20 @@ tryautoconfig:
 					goto tryautoconfig;
 				}
 			}
-			print_time();
+
 			if (AutoProxyOptions.dwFlags & WINHTTP_AUTOPROXY_RUN_OUTPROCESS_ONLY)
 			{
 				printf("Out of proc only failed. Trying in proc.\n");
 				AutoProxyOptions.dwFlags ^= WINHTTP_AUTOPROXY_RUN_OUTPROCESS_ONLY;
 				AutoProxyOptions.dwFlags |= WINHTTP_AUTOPROXY_RUN_INPROCESS;
 				goto tryautoconfig;
+			}
+			//Login failure
+			if ((error == 0x800C2EEF) || (error == 0x2EEF))
+			{
+				printf("\t\tIf you installed MS16-077: Security update for WPAD: June 14, 2016 \n");
+				printf("\t\tyou need to set AutoProxyAutoLogonIfChallenged value to 1 so that the client's domain credentials are  automatically sent in response to an NTLM or Negotiate Authentication challenge\n");
+				printf("\t\tSee https://support.microsoft.com/en-us/help/3165191/ms16-077-security-update-for-wpad-june-14-2016 \n");
 			}
 		}
 	}
@@ -556,7 +567,7 @@ tryautoconfig:
 	{
 		if ((fTryNamedProxy) || (fTryAutoProxy) || (fTryAutoConfig))
 		{
-			printf("Falling back to DIRECT/NO_PROXY\n");
+			printf(">>>>>>>>> Everything failed : Falling back to DIRECT/NO_PROXY !\n");
 		}
 		else
 		{
@@ -645,6 +656,28 @@ sendrequest:
     // Print the header contents.
     if (bResults)
         printf("\n\tHeader contents: \n%S",(wchar_t*)lpOutBuffer);
+
+	/*wchar_t *next_token = NULL;
+
+	wchar_t *header = NULL;
+	header = wcstok_s((wchar_t*)lpOutBuffer, L"\r\n", &next_token);
+	wprintf(L"Status : %s\r\n", header);
+	wchar_t *token[3] = { NULL,NULL,NULL };
+	unsigned int  i = 0;
+	token[i] = wcstok_s((wchar_t*)lpOutBuffer, L" " , &next_token);
+	while (token[i] && i<3) {
+		//wprintf(L"token: %s\r\n", token[i]);
+		i++;
+		token[i] = wcstok_s(NULL, L" ", &next_token);
+	}
+	int status_code = _wtoi(token[1]);
+	wprintf(L"status code : %d\r\n", status_code);
+
+	if ((status_code == 401) || (status_code == 407))
+	{
+		printf("\t\tIf you installed MS16-077: Security update for WPAD: June 14, 2016, you need to set AutoProxyAutoLogonIfChallenged value to  \n");
+		printf("\t\tSee https://support.microsoft.com/en-us/help/3165191/ms16-077-security-update-for-wpad-june-14-2016 \n");
+	}*/
 
     // Free the allocated memory.
     delete [] lpOutBuffer;
