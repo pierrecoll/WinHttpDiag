@@ -659,6 +659,24 @@ sendrequest:
 
     // Free the allocated memory.
     delete [] lpOutBuffer;
+
+	char buffer[10 * 1024];
+	DWORD bytesRead;
+	printf("Calling WinHttpReadData (maximum 10240 bytes)\r\n");
+	if (WinHttpReadData(hRequest, buffer, sizeof(buffer), &bytesRead))
+	{
+		wprintf(L"WinHttpReadData returning %d bytes\r\n", bytesRead);
+		if (bytesRead > 0)
+		{
+			buffer[bytesRead - 1] = '\0';
+			wprintf(L"%d bytes of buffer \r\n%S\r\n", bytesRead - 1, buffer);
+		}
+	}
+	else
+	{
+		printf("WinHttpReadData Error : %X\n", GetLastError());
+	}
+
 	/* 1.09 need to add a command line parameter
 	printf("Type y if you want to send the request again on same connection\r\n");
 	printf("or any other character to exit\r\n");
