@@ -34,20 +34,21 @@ BOOL ResetAll(HINTERNET hHttpSession);
                                         + sizeof("://") \
                                         + INTERNET_MAX_PATH_LENGTH)
 
-WCHAR Version[5] = L"1.16";
+WCHAR Version[5] = L"1.17";
 WCHAR wszWinHTTPDiagVersion[32] =L"WinHTTPDiag version ";
 
 WINHTTP_CURRENT_USER_IE_PROXY_CONFIG IEProxyConfig;
 
 void DisplayHelp()
 {
-	printf("WinHTTPDiag [-?] [-a] [-n] [-d] [-i] [-r] [url]\n");
+	printf("WinHTTPDiag [-?] [-a] [-n] [-d] [-i] [-r] [-p proxy] [url]\n");
 	printf("-? : Displays help\n");
 	printf("-n : Not using WinHttpGetIEProxyConfigForCurrentUser results when calling WinHttpGetProxyForUrl\n");
 	printf("-a : Using WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY flag (Windows 8.1 and above only)\n");
 	printf("-d : Displays the default WinHTTP proxy configuration from the registry using WinHttpGetDefaultProxyConfiguration which will be used with -n option\n");
 	printf("-i : Displays the proxy configuration using WinHttpGetIEProxyConfigForCurrentUser\n");
 	printf("-r : resetting auto-proxy caching using WinHttpResetAutoProxy with WINHTTP_RESET_ALL and WINHTTP_RESET_OUT_OF_PROC flags. Windows 8.0 and above only!\n");
+	printf("-p proxy: forcing usage of static proxy\n");
 	printf("url : url to use in WinHttpSendRequest (using http://crl.microsoft.com/pki/crl/products/CodeSignPCA.crl if none given)\n");
 	printf("You can use psexec (http://live.sysinternals.com) -s to run WinHTTPDiag using the NT AUTHORITY\\SYSTEM (S-1-5-18) account: psexec -s c:\\tools\\WinHTTPProxyDiag\n");
 	printf("You can use psexec -u \"nt authority\\local service\" to run WinHTTPDiag using the NT AUTHORITY\\LOCAL SERVICE  (S-1-5-19) account\n");
@@ -75,6 +76,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	WCHAR DefaultUrl[INTERNET_MAX_URL_LENGTH]=L"http://crl.microsoft.com/pki/crl/products/CodeSignPCA.crl";
 
 	WCHAR url[INTERNET_MAX_URL_LENGTH] = L"";
+	WCHAR NamedProxy[INTERNET_MAX_URL_LENGTH] = L""; //1.17
 
 	BOOL bGetIEProxyConfigForCurrentUser=TRUE;
 
@@ -92,6 +94,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	BOOL fUseAutomaticProxyFlag = FALSE; //1.14
     BOOL fSuccess = FALSE;
 	BOOL bInvalidParameterRetry = TRUE; //1.16
+	BOOL bNamedProxy = FALSE; //1.17
 
     ZeroMemory(&ProxyInfo, sizeof(ProxyInfo));
     ZeroMemory(&AutoProxyOptions, sizeof(AutoProxyOptions));
@@ -101,7 +104,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	if (argc == 1)
 	{
 		wcscpy_s(url, DefaultUrl);		
-		printf("Using url %S in WinHttpSendRequest\n",url);
+		printf("Using url: %S in WinHttpSendRequest\n",url);
 	}
 	//1 argument 
 	else if (argc==2)
@@ -144,12 +147,12 @@ int _tmain(int argc, _TCHAR* argv[])
 			bGetIEProxyConfigForCurrentUser=FALSE;
 			printf("Not using WinHttpGetIEProxyConfigForCurrentUser results to call WinHttpGetProxyForUrl\n");
 			wcscpy_s(url, DefaultUrl);		
-			printf("Using url %S in WinHttpSendRequest\n",url);
+			printf("Using url: %S in WinHttpSendRequest\n",url);
 		}
 		else
 		{
 			wcscpy_s(url, argv[1]);		
-			printf("Using url %S in WinHttpSendRequest\n",url);
+			printf("Using url: %S in WinHttpSendRequest\n",url);
 		}
 	}
 	else if (argc==3)
@@ -161,7 +164,7 @@ int _tmain(int argc, _TCHAR* argv[])
 				bGetIEProxyConfigForCurrentUser = FALSE;
 				printf("Not using WinHttpGetIEProxyConfigForCurrentUser to call WinHttpGetProxyForUrl\n");
 				wcscpy_s(url, argv[2]);
-				printf("Using url %S in WinHttpSendRequest\n", url);
+				printf("Using url: %S in WinHttpSendRequest\n", url);
 			}
 			else if (argv[1][1] == 'a')
 			{
@@ -169,9 +172,28 @@ int _tmain(int argc, _TCHAR* argv[])
 				bGetIEProxyConfigForCurrentUser = FALSE;
 				printf("Using WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY flag (Windows 8.1 and above only)\n");
 				wcscpy_s(url, argv[2]);
-				printf("Using url %S in WinHttpSendRequest\n", url);
+				printf("Using url: %S in WinHttpSendRequest\n", url);
 			}
 			else 
+			{
+				DisplayHelp();
+				exit(-1);
+			}
+		}
+	}
+	else if (argc == 4)
+	{
+		if ((argv[1][0] == '-') || (argv[1][0] == '/'))
+		{
+			if (argv[1][1] == 'p')
+			{
+				bNamedProxy = TRUE;
+				wcscpy_s(NamedProxy, argv[2]);
+				printf("Using proxy: %S \n", NamedProxy);
+				wcscpy_s(url, argv[3]);
+				printf("Using url: %S in WinHttpSendRequest\n", url);
+			}
+			else
 			{
 				DisplayHelp();
 				exit(-1);
@@ -184,6 +206,10 @@ int _tmain(int argc, _TCHAR* argv[])
 		exit(-1);			
 	}
 
+	if(bNamedProxy == TRUE) //1.17
+	{
+		goto winhttpopen;
+	}
 	if (bGetIEProxyConfigForCurrentUser == TRUE)
 	{	
 		if (ShowIEProxyConfigForCurrentUser())
@@ -551,11 +577,19 @@ tryautoconfig:
 		SetProxyInfo(hRequest, &ProxyInfo, cbProxyInfoSize);
 	}
 
+	if (bNamedProxy) //1.17
+	{
+		ProxyInfo.lpszProxy= NamedProxy;
+		printf("\tNamed proxy configured: %S\n", ProxyInfo.lpszProxy);
+		ProxyInfo.dwAccessType = WINHTTP_ACCESS_TYPE_NAMED_PROXY;
+		printf("->Calling WinHttpSetOption with proxy configuration set to:\n");
+		SetProxyInfo(hRequest, &ProxyInfo, cbProxyInfoSize);
+	}
 	//
 	// Send the request.
 	//
 sendrequest:
-	printf("\n->Calling  WinHttpSendRequest with hrequest: %X:\n",(unsigned int)hRequest);
+	printf("\n->Calling  WinHttpSendRequest with hrequest: %X\n",(unsigned int)hRequest);
 
 	print_time();
 	if( !WinHttpSendRequest( hRequest,
@@ -922,14 +956,14 @@ BOOL SetProxyInfo(HINTERNET hRequest, WINHTTP_PROXY_INFO* pProxyInfo, DWORD cbPr
 	{
 			// Exit if setting the proxy info failed.
 
-			printf("<-WinHttpSetOption WINHTTP_OPTION_PROXY");
+			printf("<-WinHttpSetOption WINHTTP_OPTION_PROXY\n");
 			ErrorPrint();
 			print_time();	
 			return FALSE;
 	}
 	else
 	{
-		printf("<-WinHttpSetOption WINHTTP_OPTION_PROXY suceeded");
+		printf("<-WinHttpSetOption WINHTTP_OPTION_PROXY suceeded\n");
 	}
 	return TRUE;
 }
