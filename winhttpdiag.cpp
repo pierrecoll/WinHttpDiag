@@ -33,17 +33,23 @@ BOOL ResetAll(HINTERNET hHttpSession);
                                         + sizeof("://") \
                                         + INTERNET_MAX_PATH_LENGTH)
 
-WCHAR Version[5] = L"1.17";
+WCHAR Version[5] = L"1.18";
 WCHAR wszWinHTTPDiagVersion[32] =L"WinHTTPDiag version ";
 
 WINHTTP_CURRENT_USER_IE_PROXY_CONFIG IEProxyConfig;
 
 void DisplayHelp()
 {
-	printf("WinHTTPDiag [-?] [-a] [-n] [-d] [-i] [-r] [-p proxy] [url]\n");
+	printf("Tool to diagnose proxy issues when using WinHTTP\n");
+	printf("CLR checking uses CrytoAPI2 (CAPI2) which uses WinHTTP\n");
+	printf("\tSee https://support.microsoft.com/en-us/help/2623724/description-of-the-cryptography-api-proxy-detection-mechanism-when-dow\n");
+	printf("Usage  : WinHTTPDiag [-?] [-a] [-n] [-d] [-i] [-r] [-p proxy] [url]\n");
+	printf("Using WinHttpGetIEProxyConfigForCurrentUser by default\n");
+
 	printf("-? : Displays help\n");
-	printf("-n : Not using WinHttpGetIEProxyConfigForCurrentUser results when calling WinHttpGetProxyForUrl\n");
-	printf("-a : Using WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY flag (Windows 8.1 and above only)\n");
+	printf("-n : Forces not using WinHttpGetIEProxyConfigForCurrentUser results when calling WinHttpGetProxyForUrl\n");
+	printf("-a : Using WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY flag (Windows 8.1 and above only). Used by CryptoAPI 2 (CAPI2) on Windows 10.\n");
+
 	printf("-d : Displays the default WinHTTP proxy configuration from the registry using WinHttpGetDefaultProxyConfiguration which will be used with -n option\n");
 	printf("-i : Displays the proxy configuration using WinHttpGetIEProxyConfigForCurrentUser\n");
 	printf("-r : resetting auto-proxy caching using WinHttpResetAutoProxy with WINHTTP_RESET_ALL and WINHTTP_RESET_OUT_OF_PROC flags. Windows 8.0 and above only!\n");
@@ -164,6 +170,17 @@ int _tmain(int argc, _TCHAR* argv[])
 				printf("Not using WinHttpGetIEProxyConfigForCurrentUser to call WinHttpGetProxyForUrl\n");
 				wcscpy_s(url, argv[2]);
 				printf("Using url: %S in WinHttpSendRequest\n", url);
+				//1.18
+				printf("Displaying the default WinHTTP proxy configuration from the registry using WinHttpGetDefaultProxyConfiguration\n");
+				if (WinHttpGetDefaultProxyConfiguration(&ProxyInfo))
+				{
+					ShowProxyInfo(&ProxyInfo, cbProxyInfoSize);
+				}
+				else
+				{
+					printf("<-WinHttpGetDefaultProxyConfiguration failed");
+					ErrorPrint();
+				}
 			}
 			else if (argv[1][1] == 'a')
 			{
