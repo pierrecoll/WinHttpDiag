@@ -55,9 +55,9 @@ void DisplayHelp()
 	printf("-r : resetting auto-proxy caching using WinHttpResetAutoProxy with WINHTTP_RESET_ALL and WINHTTP_RESET_OUT_OF_PROC flags. Windows 8.0 and above only!\n");
 	printf("-p proxy: forcing usage of static proxy\n");
 	printf("url : url to use in WinHttpSendRequest (using http://crl.microsoft.com/pki/crl/products/CodeSignPCA.crl if none given)\n");
-	printf("You can use psexec (http://live.sysinternals.com) -s to run WinHTTPDiag using the NT AUTHORITY\\SYSTEM (S-1-5-18) account: psexec -s c:\\tools\\WinHTTPProxyDiag\n");
-	printf("You can use psexec -u \"nt authority\\local service\" to run WinHTTPDiag using the NT AUTHORITY\\LOCAL SERVICE  (S-1-5-19) account\n");
-	printf("You can use psexec -u \"nt authority\\network service\" to run WinHTTPDiag using the NT AUTHORITY\\NETWORK SERVICE  (S-1-5-20) account\n");
+	printf("You can use psexec (http://live.sysinternals.com) -s to run WinHTTPDiag using the System (S-1-5-18) account: psexec -s c:\\tools\\WinHTTPProxyDiag\n");
+	printf("You can use psexec -u \"NT AUTHORITY\\LOCALSERVICE\" to run WinHTTPDiag using the Local Service (S-1-5-19) account\n");
+	printf("You can use psexec -u \"NT AUTHORITY\\NETWORKSERVICE\" to run WinHTTPDiag using the Network Service  (S-1-5-20) account\n");
 	printf("WinHttpGetIEProxyConfigForCurrentUser function documentation http://msdn.microsoft.com/en-us/library/windows/desktop/aa384096(v=vs.85).aspx\n");
 	printf("WinHttpGetProxyForUrl function documentation http://msdn.microsoft.com/en-us/library/windows/desktop/aa384097(v=vs.85).aspx\n\n");
 }
