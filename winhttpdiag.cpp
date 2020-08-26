@@ -33,7 +33,7 @@ BOOL ResetAll(HINTERNET hHttpSession);
                                         + sizeof("://") \
                                         + INTERNET_MAX_PATH_LENGTH)
 
-WCHAR Version[5] = L"1.18";
+WCHAR Version[5] = L"1.19";
 WCHAR wszWinHTTPDiagVersion[32] =L"WinHTTPDiag version ";
 
 WINHTTP_CURRENT_USER_IE_PROXY_CONFIG IEProxyConfig;
@@ -48,6 +48,7 @@ void DisplayHelp()
 
 	printf("-? : Displays help\n");
 	printf("-n : Forces not using WinHttpGetIEProxyConfigForCurrentUser results when calling WinHttpGetProxyForUrl\n");
+	printf("-w : Simulating  discovery of WPAD using DHCP and DNS\n");
 	printf("-a : Using WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY flag (Windows 8.1 and above only). Used by CryptoAPI 2 (CAPI2) on Windows 10.\n");
 
 	printf("-d : Displays the default WinHTTP proxy configuration from the registry using WinHttpGetDefaultProxyConfiguration which will be used with -n option\n");
@@ -116,6 +117,14 @@ int _tmain(int argc, _TCHAR* argv[])
 	{	
 		if ((argv[1][0]=='-') || (argv[1][0]=='/'))
 		{
+			if ((argv[1][1] == 'w'))
+			{
+				printf("\nForcing auto proxy detection : searching for WPAD using DHCP and if it fails DNS\n");
+				fTryAutoProxy = TRUE;
+				wcscpy_s(url, DefaultUrl);
+				printf("Using url: %S in WinHttpSendRequest\n", url);
+				goto winhttpopen;
+			}
 			if ((argv[1][1] == 'r'))
 			{
 				printf("resetting auto-proxy caching using WinHttpResetAutoProxy with WINHTTP_RESET_ALL and WINHTTP_RESET_OUT_OF_PROC flags\n");
