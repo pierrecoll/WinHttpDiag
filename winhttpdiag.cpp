@@ -33,7 +33,7 @@ BOOL ResetAll(HINTERNET hHttpSession);
                                         + sizeof("://") \
                                         + INTERNET_MAX_PATH_LENGTH)
 
-WCHAR Version[5] = L"1.19";
+WCHAR Version[5] = L"1.20";
 WCHAR wszWinHTTPDiagVersion[32] =L"WinHTTPDiag version ";
 
 WINHTTP_CURRENT_USER_IE_PROXY_CONFIG IEProxyConfig;
@@ -42,7 +42,6 @@ void DisplayHelp()
 {
 	printf("Tool to diagnose proxy issues when using WinHTTP\n");
 	printf("CLR checking uses CrytoAPI2 (CAPI2) which uses WinHTTP\n");
-	printf("\tSee https://support.microsoft.com/en-us/help/2623724/description-of-the-cryptography-api-proxy-detection-mechanism-when-dow\n");
 	printf("Usage  : WinHTTPDiag [-?] [-a] [-n] [-d] [-i] [-r] [-p proxy] [url]\n");
 	printf("Using WinHttpGetIEProxyConfigForCurrentUser by default\n");
 
@@ -55,12 +54,12 @@ void DisplayHelp()
 	printf("-i : Displays the proxy configuration using WinHttpGetIEProxyConfigForCurrentUser\n");
 	printf("-r : resetting auto-proxy caching using WinHttpResetAutoProxy with WINHTTP_RESET_ALL and WINHTTP_RESET_OUT_OF_PROC flags. Windows 8.0 and above only!\n");
 	printf("-p proxy: forcing usage of static proxy\n");
+	printf("-c PAC file url: forcing usage of a PAC file\n");
+
 	printf("url : url to use in WinHttpSendRequest (using http://crl.microsoft.com/pki/crl/products/CodeSignPCA.crl if none given)\n");
 	printf("You can use psexec (http://live.sysinternals.com) -s to run WinHTTPDiag using the System (S-1-5-18) account: psexec -s c:\\tools\\WinHTTPProxyDiag\n");
 	printf("You can use psexec -u \"NT AUTHORITY\\LOCALSERVICE\" to run WinHTTPDiag using the Local Service (S-1-5-19) account\n");
 	printf("You can use psexec -u \"NT AUTHORITY\\NETWORKSERVICE\" to run WinHTTPDiag using the Network Service  (S-1-5-20) account\n");
-	printf("WinHttpGetIEProxyConfigForCurrentUser function documentation http://msdn.microsoft.com/en-us/library/windows/desktop/aa384096(v=vs.85).aspx\n");
-	printf("WinHttpGetProxyForUrl function documentation http://msdn.microsoft.com/en-us/library/windows/desktop/aa384097(v=vs.85).aspx\n\n");
 }
 int _tmain(int argc, _TCHAR* argv[])
 {
@@ -83,7 +82,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	WCHAR url[INTERNET_MAX_URL_LENGTH] = L"";
 	WCHAR NamedProxy[INTERNET_MAX_URL_LENGTH] = L""; //1.17
-
+	WCHAR NamedPacFileUrl[INTERNET_MAX_URL_LENGTH] = L""; //1.17
 	BOOL bGetIEProxyConfigForCurrentUser=TRUE;
 
 	BOOL fResult = TRUE;
@@ -101,6 +100,7 @@ int _tmain(int argc, _TCHAR* argv[])
     BOOL fSuccess = FALSE;
 	BOOL bInvalidParameterRetry = TRUE; //1.16
 	BOOL bNamedProxy = FALSE; //1.17
+	BOOL bNamedPacFile = FALSE; //1.20
 
     ZeroMemory(&ProxyInfo, sizeof(ProxyInfo));
     ZeroMemory(&AutoProxyOptions, sizeof(AutoProxyOptions));
@@ -218,6 +218,16 @@ int _tmain(int argc, _TCHAR* argv[])
 				wcscpy_s(url, argv[3]);
 				printf("Using url: %S in WinHttpSendRequest\n", url);
 			}
+			else if (argv[1][1] == 'c')
+			{
+				bNamedPacFile = TRUE;
+				fTryAutoConfig = TRUE;
+				wcscpy_s(NamedPacFileUrl, argv[2]);
+				printf("Using PAC file: %S \n", NamedPacFileUrl);
+				AutoProxyOptions.lpszAutoConfigUrl = NamedPacFileUrl;
+				wcscpy_s(url, argv[3]);
+				printf("Using url: %S in WinHttpSendRequest\n", url);
+			}
 			else
 			{
 				DisplayHelp();
@@ -231,7 +241,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		exit(-1);			
 	}
 
-	if(bNamedProxy == TRUE) //1.17
+	if ((bNamedProxy == TRUE)  || (bNamedPacFile == TRUE))
 	{
 		goto winhttpopen;
 	}
@@ -494,7 +504,10 @@ Retry:
 		}
 
 		AutoProxyOptions.dwFlags |= WINHTTP_AUTOPROXY_CONFIG_URL;
-		AutoProxyOptions.lpszAutoConfigUrl = IEProxyConfig.lpszAutoConfigUrl;
+		if (bNamedPacFile == FALSE)  //1.20
+		{
+			AutoProxyOptions.lpszAutoConfigUrl = IEProxyConfig.lpszAutoConfigUrl;
+		}
 		printf("Setting WINHTTP_AUTOPROXY_CONFIG_URL flag in WINHTTP_AUTOPROXY_OPTIONS dwFlags\n"); 
 		printf("\t\tlpszAutoConfigUrl: %S\n", IEProxyConfig.lpszAutoConfigUrl);
 		printf("->Calling WinHttpGetProxyForUrl with following autoconfig options flags:\n");
@@ -610,6 +623,7 @@ tryautoconfig:
 		printf("->Calling WinHttpSetOption with proxy configuration set to:\n");
 		SetProxyInfo(hRequest, &ProxyInfo, cbProxyInfoSize);
 	}
+
 	//
 	// Send the request.
 	//
