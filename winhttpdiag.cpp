@@ -53,8 +53,8 @@ void DisplayHelp()
 	printf("-d : Displays the default WinHTTP proxy configuration from the registry using WinHttpGetDefaultProxyConfiguration which will be used with -n option\n");
 	printf("-i : Displays the proxy configuration using WinHttpGetIEProxyConfigForCurrentUser\n");
 	printf("-r : resetting auto-proxy caching using WinHttpResetAutoProxy with WINHTTP_RESET_ALL and WINHTTP_RESET_OUT_OF_PROC flags. Windows 8.0 and above only!\n");
-	printf("-p proxy: forcing usage of static proxy\n");
-	printf("-c PAC file url: forcing usage of a PAC file\n");
+	printf("-p proxy: forcing usage of static proxy (requires an url)\n");
+	printf("-c PAC file url: forcing usage of a PAC file (requires an url)\n");
 
 	printf("url : url to use in WinHttpSendRequest (using http://crl.microsoft.com/pki/crl/products/CodeSignPCA.crl if none given)\n");
 	printf("You can use psexec (http://live.sysinternals.com) -s to run WinHTTPDiag using the System (S-1-5-18) account: psexec -s c:\\tools\\WinHTTPProxyDiag\n");
