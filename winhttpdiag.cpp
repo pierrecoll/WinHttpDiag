@@ -57,7 +57,7 @@ void DisplayHelp()
 	printf("-c PAC file url: forcing usage of a PAC file (requires an url)\n");
 
 	printf("url : url to use in WinHttpSendRequest (using http://crl.microsoft.com/pki/crl/products/CodeSignPCA.crl if none given)\n");
-	printf("You can use psexec (http://live.sysinternals.com) -s to run WinHTTPDiag using the System (S-1-5-18) account: psexec -s c:\\tools\\WinHTTPProxyDiag\n");
+	printf("You can use psexec (http://live.sysinternals.com) -s to run WinHTTPDiag using the System (S-1-5-18) account: psexec -s c:\\tools\\WinHTTPDiag.exe\n");
 	printf("You can use psexec -u \"NT AUTHORITY\\LOCALSERVICE\" to run WinHTTPDiag using the Local Service (S-1-5-19) account\n");
 	printf("You can use psexec -u \"NT AUTHORITY\\NETWORKSERVICE\" to run WinHTTPDiag using the Network Service  (S-1-5-20) account\n");
 }
@@ -299,7 +299,7 @@ int _tmain(int argc, _TCHAR* argv[])
 			{
 				printf("\tDefault Proxy Configuration Proxy server list: %S\n", ProxyInfo.lpszProxy);
 				fTryNamedProxy = TRUE;
-				//GlobalFree(ProxyInfo.lpszProxy);  -> end of prog?
+				//GlobalFree(ProxyInfo.lpszProxy);  -> end of prog?crackhost
 			}
 			else
 			{
