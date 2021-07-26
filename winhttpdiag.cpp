@@ -33,7 +33,7 @@ BOOL ResetAll(HINTERNET hHttpSession);
                                         + sizeof("://") \
                                         + INTERNET_MAX_PATH_LENGTH)
 
-WCHAR Version[5] = L"1.20";
+WCHAR Version[5] = L"1.21";
 WCHAR wszWinHTTPDiagVersion[32] = L"WinHTTPDiag version ";
 
 WINHTTP_CURRENT_USER_IE_PROXY_CONFIG IEProxyConfig;
@@ -55,6 +55,8 @@ void DisplayHelp()
 	printf("-r : resetting auto-proxy caching using WinHttpResetAutoProxy with WINHTTP_RESET_ALL and WINHTTP_RESET_OUT_OF_PROC flags. Windows 8.0 and above only!\n");
 	printf("-p proxy: forcing usage of static proxy (requires an url)\n");
 	printf("-c PAC file url: forcing usage of a PAC file (requires an url)\n");
+
+	printf("-f : forcing DIRECT (requires an url). Useful for checking availability of PAC file bypassing usage of the PAC file if there is one\n");
 
 	printf("url : url to use in WinHttpSendRequest (using http://crl.microsoft.com/pki/crl/products/CodeSignPCA.crl if none given)\n");
 	printf("You can use psexec (http://live.sysinternals.com) -s to run WinHTTPDiag using the System (S-1-5-18) account: psexec -s c:\\tools\\WinHTTPDiag.exe\n");
@@ -101,6 +103,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	BOOL bInvalidParameterRetry = TRUE; //1.16
 	BOOL bNamedProxy = FALSE; //1.17
 	BOOL bNamedPacFile = FALSE; //1.20
+	BOOL bUseDirect = FALSE; //1.21
 
 	ZeroMemory(&ProxyInfo, sizeof(ProxyInfo));
 	ZeroMemory(&AutoProxyOptions, sizeof(AutoProxyOptions));
@@ -198,6 +201,14 @@ int _tmain(int argc, _TCHAR* argv[])
 				printf("Using WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY flag (Windows 8.1 and above only)\n");
 				wcscpy_s(url, argv[2]);
 				printf("Using url: %S in WinHttpSendRequest\n", url);
+			}
+			else if (argv[1][1] == 'f')
+			{
+				bUseDirect = TRUE;
+				printf("Forcing fallback to DIRECT\n");
+				wcscpy_s(url, argv[2]);
+				printf("Using url: %S in WinHttpSendRequest\n", url);
+				goto winhttpopen;
 			}
 			else
 			{
@@ -426,6 +437,11 @@ winhttpopen:
 	{
 		goto sendrequest;
 	}
+
+	if (bUseDirect)
+	{
+		goto sendrequest;
+	}
 	// Use DHCP and DNS-based auto-detection.
 	BOOL bTryWithDNS = FALSE;
 	if (fTryAutoProxy)
@@ -471,8 +487,35 @@ winhttpopen:
 		else
 		{
 			printf("<-WinHttpGetProxyForUrl failed");
-			ErrorPrint();
+			DWORD dwError=ErrorPrint();
 			print_time();
+
+			if (dwError == ERROR_WINHTTP_UNABLE_TO_DOWNLOAD_SCRIPT)
+			{
+				printf("Could not download the proxy auto-configuration script file: trying to access PAC file directly\n");
+				AutoProxyOptions.dwFlags ^= WINHTTP_AUTOPROXY_AUTO_DETECT;
+				AutoProxyOptions.dwFlags ^= WINHTTP_AUTOPROXY_CONFIG_URL;
+				ProxyInfo.dwAccessType ^= WINHTTP_ACCESS_TYPE_NAMED_PROXY;
+
+				printf("\t\t Setting WINHTTP_ACCESS_TYPE_NAMED_PROXY flag in WINHTTP_AUTOPROXY_OPTIONS dwAccessType\n");
+				printf("\t\tNamed proxy configured: %S\n", IEProxyConfig.lpszProxy);
+				ProxyInfo.dwAccessType = WINHTTP_ACCESS_TYPE_NO_PROXY;
+				ProxyInfo.lpszProxy = L"";
+				printf("->Calling WinHttpSetOption with proxy configuration set to:\n");
+				SetProxyInfo(hRequest, &ProxyInfo, cbProxyInfoSize);
+				wcscpy_s(url, AutoProxyOptions.lpszAutoConfigUrl);
+				fTryAutoProxy = FALSE;
+				fTryAutoConfig = FALSE;  //1.03
+				fTryNamedProxy = FALSE; //1.04
+				fResetAll = FALSE; //1.05
+				fUseAutomaticProxyFlag = FALSE; //1.14
+				fSuccess = FALSE;
+				bInvalidParameterRetry = TRUE; //1.16
+				bNamedProxy = FALSE; //1.17
+				bNamedPacFile = FALSE; //1.20
+				bUseDirect = TRUE; //1.21
+				goto winhttpopen;
+			}
 			if (bTryWithDNS == FALSE)
 			{
 				printf("Trying with DNS instead of DHCP\n");
@@ -539,8 +582,35 @@ winhttpopen:
 		{
 			//004082016  1.07
 			printf("<-WinHttpGetProxyForUrl failed");
-			ErrorPrint();
-			if (GetLastError() == ERROR_INVALID_PARAMETER)
+			DWORD dwError=ErrorPrint();
+			if (dwError == ERROR_WINHTTP_UNABLE_TO_DOWNLOAD_SCRIPT)
+			{
+				printf("Could not download the proxy auto-configuration script file: trying to access PAC file directly\n");
+				AutoProxyOptions.dwFlags ^= WINHTTP_AUTOPROXY_AUTO_DETECT;
+				AutoProxyOptions.dwFlags ^= WINHTTP_AUTOPROXY_CONFIG_URL;
+				ProxyInfo.dwAccessType ^= WINHTTP_ACCESS_TYPE_NAMED_PROXY;
+
+				printf("\t\t Setting WINHTTP_ACCESS_TYPE_NAMED_PROXY flag in WINHTTP_AUTOPROXY_OPTIONS dwAccessType\n");
+				printf("\t\tNamed proxy configured: %S\n", IEProxyConfig.lpszProxy);
+				ProxyInfo.dwAccessType = WINHTTP_ACCESS_TYPE_NO_PROXY;
+				ProxyInfo.lpszProxy = ProxyInfo.lpszProxy;
+				printf("->Calling WinHttpSetOption with proxy configuration set to:\n");
+				SetProxyInfo(hRequest, &ProxyInfo, cbProxyInfoSize);
+				fTryAutoProxy = FALSE;
+				fTryAutoConfig = FALSE;  //1.03
+				fTryNamedProxy = FALSE; //1.04
+				fResetAll = FALSE; //1.05
+				fUseAutomaticProxyFlag = FALSE; //1.14
+				fSuccess = FALSE;
+				bInvalidParameterRetry = TRUE; //1.16
+				bNamedProxy = FALSE; //1.17
+				bNamedPacFile = FALSE; //1.20
+				bUseDirect = TRUE; //1.21
+				wcscpy_s(url, AutoProxyOptions.lpszAutoConfigUrl);
+				goto winhttpopen;
+
+			}
+			if (dwError == ERROR_INVALID_PARAMETER)
 			{
 				if (bInvalidParameterRetry)
 				{
