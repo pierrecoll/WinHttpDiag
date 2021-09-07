@@ -33,7 +33,7 @@ BOOL ResetAll(HINTERNET hHttpSession);
                                         + sizeof("://") \
                                         + INTERNET_MAX_PATH_LENGTH)
 
-WCHAR Version[5] = L"1.21";
+WCHAR Version[5] = L"1.22";
 WCHAR wszWinHTTPDiagVersion[32] = L"WinHTTPDiag version ";
 
 WINHTTP_CURRENT_USER_IE_PROXY_CONFIG IEProxyConfig;
@@ -88,7 +88,7 @@ void DisplayHelp()
 	printf("-d : Displays the default WinHTTP proxy configuration from the registry using WinHttpGetDefaultProxyConfiguration which will be used with -n option\n");
 	printf("-i : Displays the proxy configuration using WinHttpGetIEProxyConfigForCurrentUser\n");
 	printf("-r : resetting auto-proxy caching using WinHttpResetAutoProxy with WINHTTP_RESET_ALL and WINHTTP_RESET_OUT_OF_PROC flags. Windows 8.0 and above only!\n");
-	printf("-p proxy: forcing usage of static proxy (requires an url)\n");
+	printf("-p proxy:port forcing usage of static proxy (requires an url ascparameter)\n");
 	printf("-c PAC file url: forcing usage of a PAC file (requires an url)\n");
 
 	printf("-f : forcing DIRECT (requires an url). Useful for checking availability of PAC file bypassing usage of the PAC file if there is one\n");
