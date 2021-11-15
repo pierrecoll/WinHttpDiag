@@ -6,7 +6,7 @@
 
 #pragma comment(lib, "winhttp.lib")
 
-void GetHost(WCHAR* pwszUrl, WCHAR* pwszHost, WCHAR* pwszPath, WCHAR* pwszExtraInfo, INTERNET_PORT* port);
+void GetHost(WCHAR* pwszUrl, WCHAR* pwszHost, WCHAR* pwszPath, WCHAR* pwszExtraInfo, INTERNET_PORT* port, INTERNET_SCHEME* nScheme );
 void 	print_time(void);
 DWORD ErrorPrint();
 //errorstr.cpp
@@ -33,7 +33,7 @@ BOOL ResetAll(HINTERNET hHttpSession);
                                         + sizeof("://") \
                                         + INTERNET_MAX_PATH_LENGTH)
 
-WCHAR Version[5] = L"1.20";
+WCHAR Version[5] = L"1.22";
 WCHAR wszWinHTTPDiagVersion[32] = L"WinHTTPDiag version ";
 
 WINHTTP_CURRENT_USER_IE_PROXY_CONFIG IEProxyConfig;
@@ -94,7 +94,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	BOOL fTryAutoProxy = FALSE;
 	BOOL fTryAutoConfig = FALSE;  //1.03
-	BOOL fTryNamedProxy = FALSE; //1.04
+	BOOL fTryStaticProxy = FALSE; //1.04
 	BOOL fResetAll = FALSE; //1.05
 	BOOL fUseAutomaticProxyFlag = FALSE; //1.14
 	BOOL fSuccess = FALSE;
@@ -263,7 +263,7 @@ int _tmain(int argc, _TCHAR* argv[])
 			if (IEProxyConfig.lpszProxy)
 			{
 				//fTryAutoProxy = FALSE;  fallback version 1.04
-				fTryNamedProxy = TRUE; //1.04
+				fTryStaticProxy = TRUE; //1.04
 			}
 
 			if (IEProxyConfig.lpszProxyBypass)
@@ -298,7 +298,7 @@ int _tmain(int argc, _TCHAR* argv[])
 			if (ProxyInfo.lpszProxy != NULL)
 			{
 				printf("\tDefault Proxy Configuration Proxy server list: %S\n", ProxyInfo.lpszProxy);
-				fTryNamedProxy = TRUE;
+				fTryStaticProxy = TRUE;
 				//GlobalFree(ProxyInfo.lpszProxy);  -> end of prog?crackhost
 			}
 			else
@@ -366,8 +366,9 @@ winhttpopen:
 	WCHAR path[INTERNET_MAX_PATH_LENGTH] = L"";
 	WCHAR ExtraInfo[INTERNET_MAX_PATH_LENGTH] = L"";
 	INTERNET_PORT port;
+	INTERNET_SCHEME nScheme;
 
-	GetHost(url, host, path, ExtraInfo, &port);
+	GetHost(url, host, path, ExtraInfo, &port, &nScheme);
 
 	WCHAR ObjectName[INTERNET_MAX_PATH_LENGTH] = L"";
 	//Combining path and extra info
@@ -404,13 +405,18 @@ winhttpopen:
 	// Create the HTTP request handle.
 	//
 	printf("\n->Calling WinHttpOpenRequest with Object name : %S\r\n", ObjectName);
+
+	// Prepare OpenRequest flag
+	DWORD dwOpenRequestFlag = (INTERNET_SCHEME_HTTPS == nScheme) ?
+		WINHTTP_FLAG_SECURE : 0;
+
 	hRequest = WinHttpOpenRequest(hConnect,
 		L"GET",
 		path,
 		L"HTTP/1.1",
 		WINHTTP_NO_REFERER,
 		WINHTTP_DEFAULT_ACCEPT_TYPES,
-		0);
+		dwOpenRequestFlag);
 
 	// Exit if WinHttpOpenRequest failed.
 	if (!hRequest)
@@ -516,7 +522,7 @@ winhttpopen:
 		AutoProxyOptions.dwFlags |= WINHTTP_AUTOPROXY_NO_DIRECTACCESS;
 		AutoProxyOptions.dwFlags |= WINHTTP_AUTOPROXY_NO_CACHE_CLIENT;
 		AutoProxyOptions.dwFlags |= WINHTTP_AUTOPROXY_NO_CACHE_SVC;
-	tryautoconfig:
+retryautoconfig:
 		PrintAutoProxyOptions(&AutoProxyOptions);
 		print_time();
 		if (WinHttpGetProxyForUrl(hHttpSession,
@@ -549,7 +555,7 @@ winhttpopen:
 					AutoProxyOptions.dwFlags ^= WINHTTP_AUTOPROXY_NO_CACHE_CLIENT;
 					AutoProxyOptions.dwFlags ^= WINHTTP_AUTOPROXY_NO_CACHE_SVC;
 					bInvalidParameterRetry = FALSE;
-					goto tryautoconfig;
+					goto retryautoconfig;
 				}
 				else
 				{
@@ -563,13 +569,13 @@ winhttpopen:
 				printf("Out of proc only failed. Trying in proc.\n");
 				AutoProxyOptions.dwFlags ^= WINHTTP_AUTOPROXY_RUN_OUTPROCESS_ONLY;
 				AutoProxyOptions.dwFlags |= WINHTTP_AUTOPROXY_RUN_INPROCESS;
-				goto tryautoconfig;
+				goto retryautoconfig;
 			}
 		}
 	}
 
 	//1.04
-	if (fTryNamedProxy)
+	if (fTryStaticProxy)
 	{
 		if ((fTryAutoProxy) || (fTryAutoConfig))
 		{
@@ -577,25 +583,84 @@ winhttpopen:
 			AutoProxyOptions.dwFlags ^= WINHTTP_AUTOPROXY_AUTO_DETECT;
 			AutoProxyOptions.dwFlags ^= WINHTTP_AUTOPROXY_CONFIG_URL;
 		}
-		printf("\tSetting WINHTTP_ACCESS_TYPE_NAMED_PROXY flag in WINHTTP_AUTOPROXY_OPTIONS dwAccessType\n");
+
 		if (bGetIEProxyConfigForCurrentUser == TRUE)
 		{
 			ProxyInfo.lpszProxy = IEProxyConfig.lpszProxy;
 		}
-		printf("\tNamed proxy configured: %S\n", ProxyInfo.lpszProxy);
-		ProxyInfo.dwAccessType = WINHTTP_ACCESS_TYPE_NAMED_PROXY;
 
-		if (IEProxyConfig.lpszProxyBypass)
+		printf("\tSetting WINHTTP_AUTOPROXY_ALLOW_STATIC flag in WINHTTP_AUTOPROXY_OPTIONS dwFlags\n");
+		AutoProxyOptions.dwFlags |= WINHTTP_AUTOPROXY_ALLOW_STATIC;
+
+		printf("->Calling WinHttpGetProxyForUrl with following autoconfig options flags:\n");
+		// 24/07/2015  
+		//04/08/20016 --> causes apparently  0x57/87 ERROR_INVALID_PARAMETER The parameter is incorrect error on Windows7/2008 R2
+		AutoProxyOptions.dwFlags |= WINHTTP_AUTOPROXY_NO_DIRECTACCESS;
+		AutoProxyOptions.dwFlags |= WINHTTP_AUTOPROXY_NO_CACHE_CLIENT;
+		AutoProxyOptions.dwFlags |= WINHTTP_AUTOPROXY_NO_CACHE_SVC;
+retrystaticproxy:
+		PrintAutoProxyOptions(&AutoProxyOptions);
+		print_time();
+		if (WinHttpGetProxyForUrl(hHttpSession,
+			url,
+			&AutoProxyOptions,
+			&ProxyInfo))
 		{
-			ProxyInfo.lpszProxyBypass = IEProxyConfig.lpszProxyBypass;
-		}
+			printf("<-WinHttpGetProxyForUrl succeeded");
+			print_time();
+			printf("\r\n");
 
-		printf("->Calling WinHttpSetOption with proxy configuration set to:\n");
-		SetProxyInfo(hRequest, &ProxyInfo, cbProxyInfoSize);
+			printf("\tNamed proxy configured: %S\n", ProxyInfo.lpszProxy);
+			printf("Setting dwAccessType to WINHTTP_ACCESS_TYPE_NAMED_PROXY\r\n");
+			ProxyInfo.dwAccessType = WINHTTP_ACCESS_TYPE_NAMED_PROXY;
+
+			if (IEProxyConfig.lpszProxyBypass)
+			{
+				ProxyInfo.lpszProxyBypass = IEProxyConfig.lpszProxyBypass;
+			}
+
+			// A proxy configuration was found, set it on the
+			// request handle 
+			printf("->Calling WinHttpSetOption with following proxy configuration found by WinHttpGetProxyForUrl:\n");
+			SetProxyInfo(hRequest, &ProxyInfo, cbProxyInfoSize);
+			print_time();
+			goto sendrequest;
+		}
+		else
+		{
+			//004082016  1.07
+			printf("<-WinHttpGetProxyForUrl failed");
+			ErrorPrint();
+			if (GetLastError() == ERROR_INVALID_PARAMETER)
+			{
+				if (bInvalidParameterRetry)
+				{
+					printf("WinHttpGetProxyForUrl failed with ERROR_INVALID_PARAMETER. Removing some parameters not supported on Windows7/2008R2\n ");
+					AutoProxyOptions.dwFlags ^= WINHTTP_AUTOPROXY_NO_DIRECTACCESS;
+					AutoProxyOptions.dwFlags ^= WINHTTP_AUTOPROXY_NO_CACHE_CLIENT;
+					AutoProxyOptions.dwFlags ^= WINHTTP_AUTOPROXY_NO_CACHE_SVC;
+					bInvalidParameterRetry = FALSE;
+					goto retrystaticproxy;
+				}
+				else
+				{
+					printf("WinHttpGetProxyForUrl failed with ERROR_INVALID_PARAMETER.\r\n ");
+					goto Exit;
+				}
+			}
+			print_time();
+			if (AutoProxyOptions.dwFlags & WINHTTP_AUTOPROXY_RUN_OUTPROCESS_ONLY)
+			{
+				printf("Out of proc only failed. Trying in proc.\n");
+				AutoProxyOptions.dwFlags ^= WINHTTP_AUTOPROXY_RUN_OUTPROCESS_ONLY;
+				AutoProxyOptions.dwFlags |= WINHTTP_AUTOPROXY_RUN_INPROCESS;
+				goto retrystaticproxy;
+			}
+		}
 	}
 	else
 	{
-		if ((fTryNamedProxy) || (fTryAutoProxy) || (fTryAutoConfig))
+		if ((fTryStaticProxy) || (fTryAutoProxy) || (fTryAutoConfig))
 		{
 			printf("Falling back to DIRECT/NO_PROXY\n");
 		}
@@ -802,7 +867,7 @@ BOOL ResetAll(HINTERNET hHttpSession)
 	return TRUE;
 }
 
-void GetHost(WCHAR* pwszUrl, WCHAR* pwszHost, WCHAR* pwszPath, WCHAR* pwszExtraInfo, INTERNET_PORT* port)
+void GetHost(WCHAR* pwszUrl, WCHAR* pwszHost, WCHAR* pwszPath, WCHAR* pwszExtraInfo, INTERNET_PORT* port, INTERNET_SCHEME* nScheme )
 {
 	URL_COMPONENTSW URLParts;
 
@@ -817,6 +882,7 @@ void GetHost(WCHAR* pwszUrl, WCHAR* pwszHost, WCHAR* pwszPath, WCHAR* pwszExtraI
 	URLParts.dwPasswordLength = -1;
 	URLParts.dwUrlPathLength = -1;
 	URLParts.dwExtraInfoLength = -1;
+	URLParts.nScheme = -1;
 
 	if (!WinHttpCrackUrl((const WCHAR*)pwszUrl, wcslen(pwszUrl), 0, &URLParts))
 	{
@@ -849,6 +915,12 @@ void GetHost(WCHAR* pwszUrl, WCHAR* pwszHost, WCHAR* pwszPath, WCHAR* pwszExtraI
 	{
 		*port = URLParts.nPort;
 		wprintf(L"WinHttpCrackUrl returning port:  %d (0x%X)\r\n", *port, *port);
+	}
+
+	if (URLParts.nScheme)
+	{
+		*nScheme = URLParts.nScheme;
+		wprintf(L"WinHttpCrackUrl returning port:  %d (0x%X)\r\n", *nScheme, *nScheme);
 	}
 	return;
 }
@@ -887,13 +959,18 @@ void PrintAutoProxyOptions(WINHTTP_AUTOPROXY_OPTIONS* pAutoProxyOptions)
 	#define WINHTTP_AUTOPROXY_CONFIG_URL            0x00000002
 	#define WINHTTP_AUTOPROXY_HOST_KEEPCASE         0x00000004
 	#define WINHTTP_AUTOPROXY_HOST_LOWERCASE        0x00000008
+	#define WINHTTP_AUTOPROXY_ALLOW_AUTOCONFIG      0x00000100
+	#define WINHTTP_AUTOPROXY_ALLOW_STATIC          0x00000200
+	#define WINHTTP_AUTOPROXY_ALLOW_CM              0x00000400
 	#define WINHTTP_AUTOPROXY_RUN_INPROCESS         0x00010000
 	#define WINHTTP_AUTOPROXY_RUN_OUTPROCESS_ONLY   0x00020000
+	#define WINHTTP_AUTOPROXY_NO_DIRECTACCESS       0x00040000
+	#define WINHTTP_AUTOPROXY_NO_CACHE_CLIENT       0x00080000
+	#define WINHTTP_AUTOPROXY_NO_CACHE_SVC          0x00100000
 	*/
 	/* 24/07/2015
-#define WINHTTP_AUTOPROXY_NO_DIRECTACCESS       0x00040000
-#define WINHTTP_AUTOPROXY_NO_CACHE_CLIENT       0x00080000
-#define WINHTTP_AUTOPROXY_NO_CACHE_SVC          0x00100000
+
+
 	*/
 	printf("Flags : %X\r\n", pAutoProxyOptions->dwFlags);
 	if (pAutoProxyOptions->dwFlags & WINHTTP_AUTOPROXY_AUTO_DETECT)
@@ -904,7 +981,16 @@ void PrintAutoProxyOptions(WINHTTP_AUTOPROXY_OPTIONS* pAutoProxyOptions)
 	{
 		printf("\tWINHTTP_AUTOPROXY_CONFIG_URL\n");
 	}
-	/*27/7/2015*/
+	
+	if (pAutoProxyOptions->dwFlags & WINHTTP_AUTOPROXY_ALLOW_AUTOCONFIG)
+	{
+		printf("\tWINHTTP_AUTOPROXY_ALLOW_AUTOCONFIG\n");
+	}
+	if (pAutoProxyOptions->dwFlags & WINHTTP_AUTOPROXY_ALLOW_STATIC)
+	{
+		printf("\tWINHTTP_AUTOPROXY_ALLOW_STATIC\n");
+	}
+
 	if (pAutoProxyOptions->dwFlags & WINHTTP_AUTOPROXY_NO_DIRECTACCESS)
 	{
 		printf("\tWINHTTP_AUTOPROXY_NO_DIRECTACCESS \n");
