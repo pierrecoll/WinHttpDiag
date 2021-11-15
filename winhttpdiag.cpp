@@ -55,7 +55,7 @@ void DisplayHelp()
 	printf("-r : resetting auto-proxy caching using WinHttpResetAutoProxy with WINHTTP_RESET_ALL and WINHTTP_RESET_OUT_OF_PROC flags. Windows 8.0 and above only!\n");
 	printf("-p proxy: forcing usage of static proxy (requires an url)\n");
 	printf("-c PAC file url: forcing usage of a PAC file (requires an url)\n");
-
+	printf("-f : forcing DIRECT(requires an url).Useful for checking access to a PAC file bypassing usage of a PAC file when there is one in the IE settings\n");
 	printf("url : url to use in WinHttpSendRequest (using http://crl.microsoft.com/pki/crl/products/CodeSignPCA.crl if none given)\n");
 	printf("You can use psexec (http://live.sysinternals.com) -s to run WinHTTPDiag using the System (S-1-5-18) account: psexec -s c:\\tools\\WinHTTPDiag.exe\n");
 	printf("You can use psexec -u \"NT AUTHORITY\\LOCALSERVICE\" to run WinHTTPDiag using the Local Service (S-1-5-19) account\n");
@@ -101,6 +101,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	BOOL bInvalidParameterRetry = TRUE; //1.16
 	BOOL bNamedProxy = FALSE; //1.17
 	BOOL bNamedPacFile = FALSE; //1.20
+	BOOL bDirect = FALSE; //1.21
 
 	ZeroMemory(&ProxyInfo, sizeof(ProxyInfo));
 	ZeroMemory(&AutoProxyOptions, sizeof(AutoProxyOptions));
@@ -199,6 +200,14 @@ int _tmain(int argc, _TCHAR* argv[])
 				wcscpy_s(url, argv[2]);
 				printf("Using url: %S in WinHttpSendRequest\n", url);
 			}
+			else if (argv[1][1] == 'f')
+			{
+				bDirect = TRUE;
+				fUseAutomaticProxyFlag = FALSE;
+				printf("Trying to use DIRECT access\n");
+				wcscpy_s(url, argv[2]);
+				printf("Using url: %S in WinHttpSendRequest\n", url);
+			}
 			else
 			{
 				DisplayHelp();
@@ -241,7 +250,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		exit(-1);
 	}
 
-	if ((bNamedProxy == TRUE) || (bNamedPacFile == TRUE))
+	if ((bNamedProxy == TRUE) || (bNamedPacFile == TRUE)  || (bDirect == TRUE) )
 	{
 		goto winhttpopen;
 	}
