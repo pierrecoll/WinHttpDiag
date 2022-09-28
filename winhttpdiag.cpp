@@ -16,7 +16,7 @@ BOOL SetProxyInfo(HINTERNET hRequest, WINHTTP_PROXY_INFO* pProxyInfo, DWORD cbPr
 BOOL QueryProxyInfo(HINTERNET hRequest, WINHTTP_PROXY_INFO* pProxyInfo, DWORD cbProxyInfoSize);
 void ShowProxyInfo(WINHTTP_PROXY_INFO* pProxyInfo, DWORD cbProxyInfoSize);
 BOOL ShowIEProxyConfigForCurrentUser();
-BOOL ResetAll(HINTERNET hHttpSession);
+BOOL ResetAll(HINTERNET hHttpSession,DWORD dwFlags);
 
 //
 // maximum field lengths (arbitrary) from wininet.h
@@ -33,7 +33,7 @@ BOOL ResetAll(HINTERNET hHttpSession);
                                         + sizeof("://") \
                                         + INTERNET_MAX_PATH_LENGTH)
 
-WCHAR Version[5] = L"1.22";
+WCHAR Version[5] = L"1.23";
 WCHAR wszWinHTTPDiagVersion[32] = L"WinHTTPDiag version ";
 
 WINHTTP_CURRENT_USER_IE_PROXY_CONFIG IEProxyConfig;
@@ -66,6 +66,7 @@ BOOL fTryAutoProxy = FALSE;
 BOOL fTryAutoConfig = FALSE;  //1.03
 BOOL fTryNamedProxy = FALSE; //1.04
 BOOL fResetAll = FALSE; //1.05
+BOOL fResetAllDiscard = FALSE; //1.23
 BOOL fUseAutomaticProxyFlag = FALSE; //1.14
 BOOL fSuccess = FALSE;
 BOOL bInvalidParameterRetry = TRUE; //1.16
@@ -88,6 +89,7 @@ void DisplayHelp()
 	printf("-d : Displays the default WinHTTP proxy configuration from the registry using WinHttpGetDefaultProxyConfiguration which will be used with -n option\n");
 	printf("-i : Displays the proxy configuration using WinHttpGetIEProxyConfigForCurrentUser\n");
 	printf("-r : resetting auto-proxy caching using WinHttpResetAutoProxy with WINHTTP_RESET_ALL and WINHTTP_RESET_OUT_OF_PROC flags. Windows 8.0 and above only!\n");
+	printf("-z : resetting auto-proxy caching using WinHttpResetAutoProxy with WINHTTP_RESET_ALL and WINHTTP_RESET_DISCARD_RESOLVERS and WINHTTP_RESET_OUT_OF_PROC flags. Windows 10.0 and above only!\n");
 	printf("-p proxy:port forcing usage of static proxy (requires an url ascparameter)\n");
 	printf("-c PAC file url: forcing usage of a PAC file (requires an url)\n");
 
@@ -134,6 +136,13 @@ int _tmain(int argc, _TCHAR* argv[])
 			{
 				printf("resetting auto-proxy caching using WinHttpResetAutoProxy with WINHTTP_RESET_ALL and WINHTTP_RESET_OUT_OF_PROC flags\n");
 				fResetAll = TRUE;
+				goto winhttpopen;
+			}
+
+			if ((argv[1][1] == 'z'))
+			{
+				printf("resetting auto-proxy caching using WinHttpResetAutoProxy with WINHTTP_RESET_ALL WINHTTP_RESET_DISCARD_RESOLVERS and WINHTTP_RESET_OUT_OF_PROC flags\n");
+				fResetAllDiscard = TRUE;
 				goto winhttpopen;
 			}
 
@@ -371,7 +380,12 @@ winhttpopen:
 	printf("<-WinHttpOpen succeeded. hHttpSession : %X \n", (unsigned int)hHttpSession);
 	if (fResetAll == TRUE)
 	{
-		ResetAll(hHttpSession);
+		ResetAll(hHttpSession, WINHTTP_RESET_ALL | WINHTTP_RESET_OUT_OF_PROC);
+		goto Exit;
+	}
+	if (fResetAllDiscard == TRUE)
+	{
+		ResetAll(hHttpSession, WINHTTP_RESET_ALL | WINHTTP_RESET_DISCARD_RESOLVERS | WINHTTP_RESET_OUT_OF_PROC);
 		goto Exit;
 	}
 	//1.09
@@ -804,7 +818,7 @@ Exit:
 	return 0;
 }
 
-BOOL ResetAll(HINTERNET hHttpSession)
+BOOL ResetAll(HINTERNET hHttpSession,DWORD dwFlags)
 {
 	DWORD dReturn;
 	typedef
@@ -827,9 +841,16 @@ BOOL ResetAll(HINTERNET hHttpSession)
 			ErrorPrint();
 			return FALSE;
 		}
-		printf("\n->Calling WinHttpResetAutoProxy witht flags WINHTTP_RESET_ALL | WINHTTP_RESET_OUT_OF_PROC\n");
+		if (dwFlags == (WINHTTP_RESET_ALL | WINHTTP_RESET_OUT_OF_PROC))
+		{
+			printf("\n->Calling WinHttpResetAutoProxy with flags WINHTTP_RESET_ALL | WINHTTP_RESET_OUT_OF_PROC\n");
+		}
+		if (dwFlags == (WINHTTP_RESET_ALL | WINHTTP_RESET_DISCARD_RESOLVERS | WINHTTP_RESET_OUT_OF_PROC))
+		{
+			printf("\n->Calling WinHttpResetAutoProxy with flags WINHTTP_RESET_ALL | WINHTTP_RESET_DISCARD_RESOLVERS | WINHTTP_RESET_OUT_OF_PROC\n");
+		}
 		print_time();
-		dReturn = pfnWinHttpResetAutoProxy(hHttpSession, WINHTTP_RESET_ALL | WINHTTP_RESET_OUT_OF_PROC);
+		dReturn = pfnWinHttpResetAutoProxy(hHttpSession, dwFlags);
 		print_time();
 		if (dReturn != ERROR_SUCCESS)
 		{
